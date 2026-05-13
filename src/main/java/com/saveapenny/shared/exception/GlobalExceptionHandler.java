@@ -3,6 +3,10 @@ package com.saveapenny.shared.exception;
 import com.saveapenny.account.exception.AccountNameAlreadyExistsException;
 import com.saveapenny.account.exception.AccountNotFoundException;
 import com.saveapenny.account.exception.AccountInactiveException;
+import com.saveapenny.automation.exception.InvalidRecurringTransactionNextRunDateException;
+import com.saveapenny.automation.exception.InvalidRecurringTransactionTypeException;
+import com.saveapenny.automation.exception.RecurringTransactionDependencyNotFoundException;
+import com.saveapenny.automation.exception.RecurringTransactionNotFoundException;
 import com.saveapenny.category.exception.CategoryNameAlreadyExistsException;
 import com.saveapenny.category.exception.CategoryNotFoundException;
 import com.saveapenny.category.exception.SystemCategoryModificationNotAllowedException;
@@ -141,6 +145,49 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleInvalidNetWorthSnapshotDate(InvalidNetWorthSnapshotDateException ex) {
         ApiError error = ApiError.builder()
                 .code("INVALID_NET_WORTH_SNAPSHOT_DATE")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(RecurringTransactionNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRecurringTransactionNotFound(RecurringTransactionNotFoundException ex) {
+        ApiError error = ApiError.builder()
+                .code("RECURRING_TRANSACTION_NOT_FOUND")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(RecurringTransactionDependencyNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRecurringTransactionDependencyNotFound(
+            RecurringTransactionDependencyNotFoundException ex) {
+        ApiError error = ApiError.builder()
+                .code("RECURRING_TRANSACTION_DEPENDENCY_NOT_FOUND")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidRecurringTransactionNextRunDateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidRecurringTransactionNextRunDate(
+            InvalidRecurringTransactionNextRunDateException ex) {
+        ApiError error = ApiError.builder()
+                .code("INVALID_RECURRING_TRANSACTION_NEXT_RUN_DATE")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidRecurringTransactionTypeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidRecurringTransactionType(
+            InvalidRecurringTransactionTypeException ex) {
+        ApiError error = ApiError.builder()
+                .code("INVALID_RECURRING_TRANSACTION_TYPE")
                 .message(ex.getMessage())
                 .details(List.of())
                 .build();
