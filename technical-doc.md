@@ -356,7 +356,7 @@ Enforced at the **service layer** — not just the controller. A shared `Reso
 | 4 | Transactions: income/expense/transfer, balance updates, audit log (completed) |
 | 5 | Budgets: monthly budgets, spending aggregation, threshold alerts (completed) |
 | 6 | Reports: monthly summary, category spending, cash flow, net worth, CSV export (completed) |
-| 7 | Recurring transactions: rules, Spring Scheduler, idempotency |
+| 7 | Recurring transactions: rules, Spring Scheduler, idempotency (completed) |
 | 8 | Notifications: in-app, event-triggered, email, preferences |
 | 9 | CSV import: upload, preview, validation, async job |
 | 10 | Testing: unit + integration, Testcontainers, 70%+ coverage |
