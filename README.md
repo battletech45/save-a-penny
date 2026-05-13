@@ -71,6 +71,19 @@ Report module uses query-based aggregation from existing account/transaction/cat
 
 Report module flag: `COMPLETE` (repository/dto/exception/mapper/service/controller/shared integration/tests/docs).
 
+## Automation status
+Recurring transaction endpoints are available under `/api/v1/automations/recurring-transactions`:
+
+- `POST /api/v1/automations/recurring-transactions`
+- `GET /api/v1/automations/recurring-transactions`
+- `GET /api/v1/automations/recurring-transactions/{recurringTransactionId}`
+- `PUT /api/v1/automations/recurring-transactions/{recurringTransactionId}`
+- `DELETE /api/v1/automations/recurring-transactions/{recurringTransactionId}`
+
+Automation module manages recurring income/expense definitions, due-run querying, and ownership-scoped soft delete.
+
+Automation module flag: `COMPLETE` (entity/repository/dto/exception/mapper/service/controller/shared tests/docs).
+
 ## Configuration
 Set the following environment variables before running the app:
 
@@ -89,3 +102,4 @@ Set the following environment variables before running the app:
 - Run budget controller/service tests only: `mvn -Dtest=BudgetControllerTest,BudgetServiceImplTest test`
 - Run report integration flow only: `mvn -Dtest=ReportFlowIntegrationTest test`
 - Run report controller/service tests only: `mvn -Dtest=ReportControllerTest,ReportServiceImplTest test`
+- Run automation controller/service tests only: `mvn -Dtest=RecurringTransactionControllerTest,RecurringTransactionServiceImplTest test`

@@ -856,6 +856,93 @@ Common errors:
 
 - `400` `INVALID_NET_WORTH_SNAPSHOT_DATE`
 
+## Automation Endpoints
+
+All automation endpoints require:
+
+`Authorization: Bearer <accessToken>`
+
+### POST `/automations/recurring-transactions`
+
+Request:
+
+```json
+{
+  "accountId": "1e45d9a5-7a63-4c33-b4b9-6db7e12f45ab",
+  "categoryId": "2e7f71b7-e5e7-4f11-8db0-0cb17f2dbd7d",
+  "type": "EXPENSE",
+  "amount": 100.0000,
+  "frequency": "MONTHLY",
+  "nextRunDate": "2026-06-01"
+}
+```
+
+Response `201`: `RecurringTransactionResponse` envelope.
+
+Common errors:
+
+- `400` `INVALID_RECURRING_TRANSACTION_TYPE`
+- `400` `INVALID_RECURRING_TRANSACTION_NEXT_RUN_DATE`
+- `404` `RECURRING_TRANSACTION_DEPENDENCY_NOT_FOUND`
+
+### GET `/automations/recurring-transactions`
+
+Supports `page`, `size`, `sort` query params via Spring `Pageable`.
+
+Response `200`: paged `RecurringTransactionResponse` envelope.
+
+### GET `/automations/recurring-transactions/{recurringTransactionId}`
+
+Response `200`: `RecurringTransactionResponse` envelope.
+
+Common errors:
+
+- `404` `RECURRING_TRANSACTION_NOT_FOUND`
+
+### PUT `/automations/recurring-transactions/{recurringTransactionId}`
+
+Request:
+
+```json
+{
+  "accountId": "1e45d9a5-7a63-4c33-b4b9-6db7e12f45ab",
+  "categoryId": "2e7f71b7-e5e7-4f11-8db0-0cb17f2dbd7d",
+  "type": "INCOME",
+  "amount": 250.0000,
+  "frequency": "WEEKLY",
+  "nextRunDate": "2026-06-05",
+  "active": true
+}
+```
+
+Response `200`: updated `RecurringTransactionResponse` envelope.
+
+Common errors:
+
+- `404` `RECURRING_TRANSACTION_NOT_FOUND`
+- `404` `RECURRING_TRANSACTION_DEPENDENCY_NOT_FOUND`
+- `400` `INVALID_RECURRING_TRANSACTION_TYPE`
+- `400` `INVALID_RECURRING_TRANSACTION_NEXT_RUN_DATE`
+
+### DELETE `/automations/recurring-transactions/{recurringTransactionId}`
+
+Soft deletes recurring transaction (`active=false`).
+
+Response `200`:
+
+```json
+{
+  "success": true,
+  "data": null,
+  "error": null,
+  "timestamp": "2026-05-13T12:00:00Z"
+}
+```
+
+Common errors:
+
+- `404` `RECURRING_TRANSACTION_NOT_FOUND`
+
 ## Quick cURL
 
 ```bash
