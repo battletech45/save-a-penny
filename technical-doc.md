@@ -291,7 +291,11 @@ Error shape:
 
 **Reports:** `GET /reports/monthly-summary`, `/category-spending`, `/cash-flow`, `/net-worth`
 
-**CSV Import:** `POST /imports/transactions/preview` → `POST /imports/transactions/confirm` → `GET /imports/{id}/status`
+**CSV Import:** `POST /imports/transactions/preview` → `POST /imports/transactions/confirm` → `GET /imports/transactions/{id}/status`
+
+Import status values: `PENDING | RUNNING | COMPLETED | FAILED`
+
+Import row status values: `VALID | IMPORTED | FAILED | SKIPPED`
 
 ---
 
@@ -342,6 +346,7 @@ Enforced at the **service layer** — not just the controller. A shared `Reso
 | Budget WARNING fires at ≥80% | `BudgetService.calculateStatus()` |
 | CSV duplicate transactions are skipped | Hash of `(account_id, amount, date, description)` |
 | Recurring transactions are idempotent | `next_run_date` checked before generation; distributed lock on scheduler |
+| CSV import confirm is asynchronous | `ImportService.confirm()` sets `RUNNING`; `ImportAsyncJobService` processes in background |
 
 ---
 
@@ -358,7 +363,7 @@ Enforced at the **service layer** — not just the controller. A shared `Reso
 | 6 | Reports: monthly summary, category spending, cash flow, net worth, CSV export (completed) |
 | 7 | Recurring transactions: rules, Spring Scheduler, idempotency (completed) |
 | 8 | Notifications: in-app, event-triggered, email, preferences (completed) |
-| 9 | CSV import: upload, preview, validation, async job |
+| 9 | CSV import: upload, preview, validation, async job (completed) |
 | 10 | Testing: unit + integration, Testcontainers, 70%+ coverage |
 | 11 | Redis: caching, token blacklist, rate limiting |
 | 12 | Event-driven: App Events → Kafka/RabbitMQ, retry, DLQ |
@@ -377,6 +382,7 @@ Enforced at the **service layer** — not just the controller. A shared `Reso
 - [x]  Transaction creation updates account balance atomically
 - [x]  Transfer correctly debits and credits in a single transaction boundary
 - [x]  Budget status reflects spending percentage accurately
+- [x]  CSV import preview/confirm/status flow works for authenticated users
 - [ ]  Monthly summary report returns correct aggregates
 - [ ]  Flyway migrations run cleanly on a fresh database
 - [x]  Core business logic covered by unit tests
