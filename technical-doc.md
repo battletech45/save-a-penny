@@ -28,7 +28,9 @@ com.saveapenny
  ├── category
  ├── budget
  ├── report
+ ├── automation
  ├── notification
+ ├── imports
  ├── shared
  └── config
 ```
