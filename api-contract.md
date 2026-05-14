@@ -1043,6 +1043,92 @@ Response `200`:
 }
 ```
 
+## Import Endpoints
+
+All import endpoints require:
+
+`Authorization: Bearer <accessToken>`
+
+### POST `/imports/transactions/preview`
+
+Request: `multipart/form-data` with file part named `file` (`.csv` only).
+
+Response `201`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "importId": "f6f2ddca-cd29-4f11-a877-fefa093f0f3e",
+    "fileName": "transactions.csv",
+    "totalRows": 2,
+    "validRows": 1,
+    "invalidRows": 1,
+    "errors": [
+      {
+        "rowNumber": 3,
+        "errorMessage": "Amount is invalid",
+        "rawData": "EXPENSE,2026-05-02,not-a-number,USD,a2,c2"
+      }
+    ]
+  },
+  "error": null,
+  "timestamp": "2026-05-14T11:00:00Z"
+}
+```
+
+Common errors:
+
+- `400` `INVALID_IMPORT_FILE`
+
+### POST `/imports/transactions/confirm`
+
+Request:
+
+```json
+{
+  "importId": "f6f2ddca-cd29-4f11-a877-fefa093f0f3e"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "importId": "f6f2ddca-cd29-4f11-a877-fefa093f0f3e",
+    "status": "RUNNING",
+    "totalRows": 2,
+    "importedRows": 0,
+    "failedRows": 1,
+    "createdAt": "2026-05-14T11:00:00Z",
+    "updatedAt": "2026-05-14T11:00:02Z"
+  },
+  "error": null,
+  "timestamp": "2026-05-14T11:00:02Z"
+}
+```
+
+Common errors:
+
+- `404` `IMPORT_NOT_FOUND`
+- `409` `IMPORT_ALREADY_RUNNING`
+- `400` `VALIDATION_FAILED`
+
+### GET `/imports/transactions/{importId}/status`
+
+Response `200`: same payload shape as confirm response.
+
+Status values:
+
+- Import: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
+- Import row: `VALID`, `IMPORTED`, `FAILED`, `SKIPPED`
+
+Common errors:
+
+- `404` `IMPORT_NOT_FOUND`
+
 ## Quick cURL
 
 ```bash
@@ -1084,5 +1170,23 @@ curl -X POST http://localhost:8080/api/v1/budgets \
 
 ```bash
 curl "http://localhost:8080/api/v1/budgets/<budget-id>/status" \
+  -H "Authorization: Bearer <access-token>"
+```
+
+```bash
+curl -X POST http://localhost:8080/api/v1/imports/transactions/preview \
+  -H "Authorization: Bearer <access-token>" \
+  -F "file=@transactions.csv"
+```
+
+```bash
+curl -X POST http://localhost:8080/api/v1/imports/transactions/confirm \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"importId":"<import-id>"}'
+```
+
+```bash
+curl "http://localhost:8080/api/v1/imports/transactions/<import-id>/status" \
   -H "Authorization: Bearer <access-token>"
 ```

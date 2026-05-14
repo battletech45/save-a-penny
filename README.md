@@ -99,6 +99,22 @@ Notification module supports in-app notifications with read/unread filtering, un
 
 Notification module flag: `COMPLETE` (entity/repository/dto/exception/mapper/service/controller/shared integration/tests/docs).
 
+## Import status
+CSV import endpoints are available under `/api/v1/imports/transactions`:
+
+- `POST /api/v1/imports/transactions/preview` (multipart form-data with `file`)
+- `POST /api/v1/imports/transactions/confirm`
+- `GET /api/v1/imports/transactions/{importId}/status`
+
+Import module supports preview validation, persisted import/import_rows tracking, and async confirm processing.
+
+Import module statuses:
+
+- Import: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
+- Import row: `VALID`, `IMPORTED`, `FAILED`, `SKIPPED`
+
+Import module flag: `COMPLETE` (entity/repository/dto/exception/mapper/service/controller/shared integration/tests/docs).
+
 ## Configuration
 Set the following environment variables before running the app:
 
@@ -120,3 +136,5 @@ Set the following environment variables before running the app:
 - Run automation controller/service tests only: `mvn -Dtest=RecurringTransactionControllerTest,RecurringTransactionServiceImplTest test`
 - Run notification integration flow only: `mvn -Dtest=NotificationFlowIntegrationTest test`
 - Run notification controller/service tests only: `mvn -Dtest=NotificationControllerTest,NotificationServiceImplTest test`
+- Run import integration flow only: `mvn -Dtest=ImportFlowIntegrationTest test`
+- Run import controller/service tests only: `mvn -Dtest=ImportControllerTest,ImportServiceImplTest test`
