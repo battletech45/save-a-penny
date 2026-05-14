@@ -23,6 +23,9 @@ import com.saveapenny.auth.exception.EmailAlreadyExistsException;
 import com.saveapenny.auth.exception.InvalidCredentialsException;
 import com.saveapenny.auth.exception.InvalidRefreshTokenException;
 import com.saveapenny.auth.exception.RefreshTokenExpiredException;
+import com.saveapenny.imports.exception.ImportAlreadyRunningException;
+import com.saveapenny.imports.exception.ImportNotFoundException;
+import com.saveapenny.imports.exception.InvalidImportFileException;
 import com.saveapenny.shared.api.ApiError;
 import com.saveapenny.shared.api.ApiResponse;
 import com.saveapenny.user.exception.InvalidPasswordException;
@@ -273,6 +276,36 @@ public class GlobalExceptionHandler {
                 .details(List.of())
                 .build();
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ImportNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleImportNotFound(ImportNotFoundException ex) {
+        ApiError error = ApiError.builder()
+                .code("IMPORT_NOT_FOUND")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidImportFileException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidImportFile(InvalidImportFileException ex) {
+        ApiError error = ApiError.builder()
+                .code("INVALID_IMPORT_FILE")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ImportAlreadyRunningException.class)
+    public ResponseEntity<ApiResponse<Void>> handleImportAlreadyRunning(ImportAlreadyRunningException ex) {
+        ApiError error = ApiError.builder()
+                .code("IMPORT_ALREADY_RUNNING")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(UserNotFoundException.class)
