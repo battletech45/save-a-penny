@@ -10,6 +10,9 @@ import com.saveapenny.shared.api.ApiResponse;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +40,21 @@ public class ReportController {
             @RequestParam LocalDate to) {
         MonthlySummaryResponse response = reportService.getMonthlySummary(getCurrentUserId(principal), from, to);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping(value = "/monthly-summary/export", produces = "text/csv")
+    public ResponseEntity<ByteArrayResource> exportMonthlySummaryCsv(
+            @AuthenticationPrincipal CurrentUserPrincipal principal,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        byte[] csv = reportService.exportMonthlySummaryCsv(getCurrentUserId(principal), from, to);
+        ByteArrayResource resource = new ByteArrayResource(csv);
+        String filename = "monthly-summary-%s-to-%s.csv".formatted(from, to);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(resource);
     }
 
     @GetMapping("/category-spending")

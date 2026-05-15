@@ -12,6 +12,8 @@ public interface ReportService {
 
     MonthlySummaryResponse getMonthlySummary(UUID currentUserId, LocalDate from, LocalDate to);
 
+    byte[] exportMonthlySummaryCsv(UUID currentUserId, LocalDate from, LocalDate to);
+
     List<CategorySpendingResponse> getCategorySpending(UUID currentUserId, LocalDate from, LocalDate to);
 
     List<CashFlowPointResponse> getCashFlow(UUID currentUserId, LocalDate from, LocalDate to);

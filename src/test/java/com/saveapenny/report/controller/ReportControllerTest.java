@@ -2,6 +2,8 @@ package com.saveapenny.report.controller;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -141,5 +143,25 @@ class ReportControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("INVALID_REPORT_DATE_RANGE"));
+    }
+
+    @Test
+    void exportMonthlySummaryCsv_returnsCsvAttachment() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(jwtService.isAccessTokenValid("token-r6")).thenReturn(true);
+        when(jwtService.extractUserId("token-r6")).thenReturn(userId);
+        when(reportService.exportMonthlySummaryCsv(userId, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31)))
+                .thenReturn(("startDate,endDate,totalIncome,totalExpense,netSavings\n"
+                        + "2026-05-01,2026-05-31,1200.0000,700.0000,500.0000").getBytes());
+
+        mockMvc.perform(get("/api/v1/reports/monthly-summary/export")
+                        .header("Authorization", "Bearer token-r6")
+                        .param("from", "2026-05-01")
+                        .param("to", "2026-05-31"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "text/csv"))
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"monthly-summary-2026-05-01-to-2026-05-31.csv\""))
+                .andExpect(content().string("startDate,endDate,totalIncome,totalExpense,netSavings\n"
+                        + "2026-05-01,2026-05-31,1200.0000,700.0000,500.0000"));
     }
 }

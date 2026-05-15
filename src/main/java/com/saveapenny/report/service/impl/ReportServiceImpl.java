@@ -13,6 +13,7 @@ import com.saveapenny.report.repository.ReportTransactionRepository;
 import com.saveapenny.report.service.ReportService;
 import com.saveapenny.transaction.entity.TransactionType;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +51,22 @@ public class ReportServiceImpl implements ReportService {
         BigDecimal netSavings = totalIncome.subtract(totalExpense);
 
         return reportMapper.toMonthlySummaryResponse(from, to, totalIncome, totalExpense, netSavings);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportMonthlySummaryCsv(UUID currentUserId, LocalDate from, LocalDate to) {
+        MonthlySummaryResponse summary = getMonthlySummary(currentUserId, from, to);
+        String csv = String.join(
+                "\n",
+                "startDate,endDate,totalIncome,totalExpense,netSavings",
+                "%s,%s,%s,%s,%s".formatted(
+                        summary.getStartDate(),
+                        summary.getEndDate(),
+                        summary.getTotalIncome(),
+                        summary.getTotalExpense(),
+                        summary.getNetSavings()));
+        return csv.getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
