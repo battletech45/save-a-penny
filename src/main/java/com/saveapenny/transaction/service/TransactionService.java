@@ -6,6 +6,7 @@ import com.saveapenny.transaction.dto.TransactionResponse;
 import com.saveapenny.transaction.dto.TransferResponse;
 import com.saveapenny.transaction.dto.UpdateTransactionRequest;
 import com.saveapenny.transaction.entity.TransactionType;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,9 @@ public interface TransactionService {
             TransactionType type,
             UUID accountId,
             UUID categoryId,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String keyword,
             Pageable pageable);
 
     TransactionResponse getById(UUID currentUserId, UUID transactionId);

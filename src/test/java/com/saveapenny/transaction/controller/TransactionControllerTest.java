@@ -106,7 +106,7 @@ class TransactionControllerTest {
         UUID userId = UUID.randomUUID();
         when(jwtService.isAccessTokenValid("token-3")).thenReturn(true);
         when(jwtService.extractUserId("token-3")).thenReturn(userId);
-        when(transactionService.getAll(eq(userId), any(), any(), any(), any(), any(), any()))
+        when(transactionService.getAll(eq(userId), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/api/v1/transactions")
@@ -114,6 +114,36 @@ class TransactionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].type").value("EXPENSE"));
+    }
+
+    @Test
+    void getAll_withAdvancedFilters_returnsPageEnvelope() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(jwtService.isAccessTokenValid("token-3b")).thenReturn(true);
+        when(jwtService.extractUserId("token-3b")).thenReturn(userId);
+        when(transactionService.getAll(
+                        eq(userId),
+                        eq(LocalDate.of(2026, 5, 1)),
+                        eq(LocalDate.of(2026, 5, 31)),
+                        eq(TransactionType.EXPENSE),
+                        any(),
+                        any(),
+                        eq(new BigDecimal("10.00")),
+                        eq(new BigDecimal("50.00")),
+                        eq("groceries"),
+                        any()))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/api/v1/transactions")
+                        .header("Authorization", "Bearer token-3b")
+                        .param("from", "2026-05-01")
+                        .param("to", "2026-05-31")
+                        .param("type", "EXPENSE")
+                        .param("minAmount", "10.00")
+                        .param("maxAmount", "50.00")
+                        .param("keyword", "groceries"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 
     @Test

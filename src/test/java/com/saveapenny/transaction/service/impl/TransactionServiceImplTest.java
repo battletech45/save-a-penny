@@ -3,6 +3,7 @@ package com.saveapenny.transaction.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,6 +26,7 @@ import com.saveapenny.transaction.repository.TransactionRepository;
 import com.saveapenny.transaction.repository.TransferRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceImplTest {
@@ -175,5 +179,67 @@ class TransactionServiceImplTest {
         when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
 
         assertThrows(InsufficientBalanceException.class, () -> transactionService.create(userId, request));
+    }
+
+    @Test
+    void getAll_usesCombinedFiltersSearch() {
+        LocalDate from = LocalDate.of(2026, 5, 1);
+        LocalDate to = LocalDate.of(2026, 5, 31);
+        BigDecimal minAmount = new BigDecimal("10.00");
+        BigDecimal maxAmount = new BigDecimal("50.00");
+        String keyword = " groceries ";
+        PageRequest pageable = PageRequest.of(0, 20);
+
+        Transaction transaction = Transaction.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .accountId(accountId)
+                .categoryId(categoryId)
+                .type(TransactionType.EXPENSE)
+                .amount(new BigDecimal("25.0000"))
+                .currency("USD")
+                .transactionDate(LocalDate.of(2026, 5, 10))
+                .build();
+        TransactionResponse response = TransactionResponse.builder().id(transaction.getId()).build();
+
+        when(transactionRepository.search(
+                        eq(userId),
+                        eq(from),
+                        eq(to),
+                        eq(TransactionType.EXPENSE),
+                        eq(accountId),
+                        eq(categoryId),
+                        eq(minAmount),
+                        eq(maxAmount),
+                        eq("groceries"),
+                        eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(transaction), pageable, 1));
+        when(transactionMapper.toResponse(transaction)).thenReturn(response);
+
+        var result = transactionService.getAll(
+                userId,
+                from,
+                to,
+                TransactionType.EXPENSE,
+                accountId,
+                categoryId,
+                minAmount,
+                maxAmount,
+                keyword,
+                pageable);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals(transaction.getId(), result.getContent().get(0).getId());
+        verify(transactionRepository).search(
+                userId,
+                from,
+                to,
+                TransactionType.EXPENSE,
+                accountId,
+                categoryId,
+                minAmount,
+                maxAmount,
+                "groceries",
+                pageable);
     }
 }

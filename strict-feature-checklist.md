@@ -10,7 +10,6 @@ Reference baseline: `technical-doc.md` sections 5, 7, 8, and 9.
 
 | Feature | Status | Evidence |
 | --- | --- | --- |
-| Transactions full filtering contract (`minAmount`, `maxAmount`, `keyword` included in spec) | Partial | Controller currently exposes `from`, `to`, `type`, `accountId`, `categoryId` in `src/main/java/com/saveapenny/transaction/controller/TransactionController.java` |
 
 ## 2) Key Business Rules (Section 7)
 
