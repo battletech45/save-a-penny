@@ -1,6 +1,7 @@
 package com.saveapenny.report.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +19,7 @@ import com.saveapenny.report.repository.ReportAccountRepository;
 import com.saveapenny.report.repository.ReportTransactionRepository;
 import com.saveapenny.transaction.entity.TransactionType;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -192,5 +194,36 @@ class ReportServiceImplTest {
     void getNetWorth_throws_whenSnapshotDateInFuture() {
         assertThrows(InvalidNetWorthSnapshotDateException.class,
                 () -> reportService.getNetWorth(userId, LocalDate.now().plusDays(1)));
+    }
+
+    @Test
+    void exportMonthlySummaryCsv_returnsHeaderAndDataRow() {
+        when(reportTransactionRepository.sumAmountByUserIdAndTypeAndTransactionDateBetween(
+                        userId, TransactionType.INCOME, from, to))
+                .thenReturn(new BigDecimal("1500.0000"));
+        when(reportTransactionRepository.sumAmountByUserIdAndTypeAndTransactionDateBetween(
+                        userId, TransactionType.EXPENSE, from, to))
+                .thenReturn(new BigDecimal("500.0000"));
+
+        MonthlySummaryResponse mapped = MonthlySummaryResponse.builder()
+                .startDate(from)
+                .endDate(to)
+                .totalIncome(new BigDecimal("1500.0000"))
+                .totalExpense(new BigDecimal("500.0000"))
+                .netSavings(new BigDecimal("1000.0000"))
+                .build();
+        when(reportMapper.toMonthlySummaryResponse(
+                        from,
+                        to,
+                        new BigDecimal("1500.0000"),
+                        new BigDecimal("500.0000"),
+                        new BigDecimal("1000.0000")))
+                .thenReturn(mapped);
+
+        byte[] result = reportService.exportMonthlySummaryCsv(userId, from, to);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(csv.startsWith("startDate,endDate,totalIncome,totalExpense,netSavings"));
+        assertTrue(csv.contains("2026-05-01,2026-05-31,1500.0000,500.0000,1000.0000"));
     }
 }
