@@ -1,6 +1,6 @@
 ---
 
-> **Version:** 1.0 · **Audience:** Backend Engineers · **Stack:** Java 21 · Spring Boot · PostgreSQL · Modular Monolith
+> **Version:** 1.0 · **Audience:** Backend Engineers · **Stack:** Java 24 · Spring Boot · PostgreSQL · Modular Monolith
 > 
 
 ---
@@ -365,9 +365,9 @@ Enforced at the **service layer** — not just the controller. A shared `Reso
 | 3 | Categories: seed data, custom categories, delete guard (completed) |
 | 4 | Transactions: income/expense/transfer, balance updates, audit log (completed) |
 | 5 | Budgets: monthly budgets, spending aggregation, threshold alerts (completed) |
-| 6 | Reports: monthly summary, category spending, cash flow, net worth, CSV export (completed) |
+| 6 | Reports: monthly summary, category spending, cash flow, net worth, CSV export (partially completed: monthly-summary CSV export done; remaining report CSV exports pending) |
 | 7 | Recurring transactions: rules, Spring Scheduler, idempotency (completed) |
-| 8 | Notifications: in-app, event-triggered, email, preferences (completed) |
+| 8 | Notifications: in-app, event-triggered, email, preferences (partially completed: in-app done; event/email/preferences pending) |
 | 9 | CSV import: upload, preview, validation, async job (completed) |
 | 10 | Testing: unit + integration, Testcontainers, 70%+ coverage |
 | 11 | Redis: caching, token blacklist, rate limiting |
@@ -389,7 +389,7 @@ Enforced at the **service layer** — not just the controller. A shared `Reso
 - [x]  Budget status reflects spending percentage accurately
 - [x]  CSV import preview/confirm/status flow works for authenticated users
 - [x]  Audit log create/list/detail endpoints enforce user ownership
-- [ ]  Monthly summary report returns correct aggregates
+- [x]  Monthly summary report returns correct aggregates
 - [ ]  Flyway migrations run cleanly on a fresh database
 - [x]  Core business logic covered by unit tests
 - [ ]  App boots with `docker compose up`

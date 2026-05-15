@@ -10,6 +10,8 @@ Reference baseline: `technical-doc.md` sections 5, 7, 8, and 9.
 
 | Feature | Status | Evidence |
 | --- | --- | --- |
+| Reports CSV export coverage | Partial | Monthly summary CSV export exists in `src/main/java/com/saveapenny/report/controller/ReportController.java`; category-spending/cash-flow/net-worth CSV exports are not implemented |
+| Notification channel coverage | Partial | In-app notification endpoints are implemented in `src/main/java/com/saveapenny/notification/controller/NotificationController.java`; event-triggered/email/preferences flows are not implemented |
 
 ## 2) Key Business Rules (Section 7)
 
@@ -20,8 +22,6 @@ Reference baseline: `technical-doc.md` sections 5, 7, 8, and 9.
 
 | Phase | Scope | Status | Evidence |
 | --- | --- | --- | --- |
-| 6 | Reports + CSV export | Partial | Monthly summary CSV export implemented in `src/main/java/com/saveapenny/report/controller/ReportController.java`; remaining report CSV exports not found |
-| 8 | Notifications (in-app + event + email + preferences) | Partial | In-app notification API present in `src/main/java/com/saveapenny/notification/`; event/email/preferences not found |
 | 10 | Unit + integration + Testcontainers + 70%+ coverage | Partial | Unit/integration tests strong; Testcontainers usage not found in test classes |
 | 11 | Redis (cache/token blacklist/rate limiting) | Missing | No Redis config/module found in main code |
 | 12 | Event-driven (Kafka/RabbitMQ + retry + DLQ) | Missing | No event bus producer/consumer messaging modules found |

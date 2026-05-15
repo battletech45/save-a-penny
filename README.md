@@ -71,7 +71,7 @@ Report endpoints are available under `/api/v1/reports`:
 
 Report module uses query-based aggregation from existing account/transaction/category data and returns the standard API envelope.
 
-Report module flag: `COMPLETE` (repository/dto/exception/mapper/service/controller/shared integration/tests/docs).
+Report module flag: `PARTIAL` (report JSON endpoints and monthly-summary CSV export are complete; CSV export for category-spending/cash-flow/net-worth is pending).
 
 ## Automation status
 Recurring transaction endpoints are available under `/api/v1/automations/recurring-transactions`:
@@ -98,8 +98,9 @@ Notification endpoints are available under `/api/v1/notifications`:
 - `PATCH /api/v1/notifications/mark-all-read`
 
 Notification module supports in-app notifications with read/unread filtering, unread count, and mark-all-read flow.
+Event-triggered notifications, email delivery, and user preference management are still pending.
 
-Notification module flag: `COMPLETE` (entity/repository/dto/exception/mapper/service/controller/shared integration/tests/docs).
+Notification module flag: `PARTIAL` (in-app notification flows complete; event/email/preferences pending).
 
 ## Import status
 CSV import endpoints are available under `/api/v1/imports/transactions`:
