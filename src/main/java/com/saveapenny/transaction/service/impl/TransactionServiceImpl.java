@@ -129,20 +129,22 @@ public class TransactionServiceImpl implements TransactionService {
             TransactionType type,
             UUID accountId,
             UUID categoryId,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String keyword,
             Pageable pageable) {
-        Page<Transaction> page;
-        if (from != null && to != null) {
-            page = transactionRepository.findAllByUserIdAndTransactionDateBetween(currentUserId, from, to, pageable);
-        } else if (type != null) {
-            page = transactionRepository.findAllByUserIdAndType(currentUserId, type, pageable);
-        } else if (accountId != null) {
-            page = transactionRepository.findAllByUserIdAndAccountId(currentUserId, accountId, pageable);
-        } else if (categoryId != null) {
-            page = transactionRepository.findAllByUserIdAndCategoryId(currentUserId, categoryId, pageable);
-        } else {
-            page = transactionRepository.findAllByUserId(currentUserId, pageable);
-        }
-
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
+        Page<Transaction> page = transactionRepository.search(
+                currentUserId,
+                from,
+                to,
+                type,
+                accountId,
+                categoryId,
+                minAmount,
+                maxAmount,
+                normalizedKeyword,
+                pageable);
         return page.map(transactionMapper::toResponse);
     }
 

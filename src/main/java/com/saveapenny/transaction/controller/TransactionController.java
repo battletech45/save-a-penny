@@ -10,6 +10,7 @@ import com.saveapenny.transaction.dto.UpdateTransactionRequest;
 import com.saveapenny.transaction.entity.TransactionType;
 import com.saveapenny.transaction.service.TransactionService;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -65,6 +66,9 @@ public class TransactionController {
             @RequestParam(required = false) TransactionType type,
             @RequestParam(required = false) UUID accountId,
             @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) BigDecimal minAmount,
+            @RequestParam(required = false) BigDecimal maxAmount,
+            @RequestParam(required = false) String keyword,
             Pageable pageable) {
         Page<TransactionResponse> response = transactionService.getAll(
                 getCurrentUserId(principal),
@@ -73,6 +77,9 @@ public class TransactionController {
                 type,
                 accountId,
                 categoryId,
+                minAmount,
+                maxAmount,
+                keyword,
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
