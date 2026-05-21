@@ -25,6 +25,15 @@ spring:
 server:
   port: 8080
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
 logging:
   level:
     org.springframework: info
@@ -41,3 +50,13 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: alpha
     tags-sorter: alpha
+
+ocr:
+  enabled: true
+  tessdata-path: /opt/homebrew/share/tessdata
+  language: eng
+  psm: 3
+  max-file-size-bytes: 10485760
+  job-timeout-millis: 30000
+  max-retries: 2
+  debug-logging: false
