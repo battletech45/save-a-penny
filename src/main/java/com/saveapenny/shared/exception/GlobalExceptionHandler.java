@@ -29,6 +29,9 @@ import com.saveapenny.auth.exception.RefreshTokenExpiredException;
 import com.saveapenny.imports.exception.ImportAlreadyRunningException;
 import com.saveapenny.imports.exception.ImportNotFoundException;
 import com.saveapenny.imports.exception.InvalidImportFileException;
+import com.saveapenny.imports.exception.InvalidOcrFileException;
+import com.saveapenny.imports.exception.OcrJobNotFoundException;
+import com.saveapenny.service.ocr.OcrProcessingException;
 import com.saveapenny.shared.api.ApiError;
 import com.saveapenny.shared.api.ApiResponse;
 import com.saveapenny.user.exception.InvalidPasswordException;
@@ -339,6 +342,36 @@ public class GlobalExceptionHandler {
                 .details(List.of())
                 .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OcrJobNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOcrJobNotFound(OcrJobNotFoundException ex) {
+        ApiError error = ApiError.builder()
+                .code("OCR_JOB_NOT_FOUND")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidOcrFileException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidOcrFile(InvalidOcrFileException ex) {
+        ApiError error = ApiError.builder()
+                .code("INVALID_OCR_FILE")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OcrProcessingException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOcrProcessing(OcrProcessingException ex) {
+        ApiError error = ApiError.builder()
+                .code("OCR_PROCESSING_FAILED")
+                .message(ex.getMessage())
+                .details(List.of())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(UserNotFoundException.class)
