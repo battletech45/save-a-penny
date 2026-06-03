@@ -69,11 +69,11 @@ springdoc:
     filter: true
 
 assistant:
-  enabled: ${ASSISTANT_ENABLED:true}
+  enabled: ${ASSISTANT_ENABLED:false}
   max-history: 8
   model: ${ASSISTANT_MODEL:poolside/laguna-xs.2:free}
   provider: ${ASSISTANT_AI_PROVIDER:openrouter}
-  openrouter-api-key: ${OPENROUTER_API_KEY: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}
+  openrouter-api-key: ${OPENROUTER_API_KEY:}
   openrouter-base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
   openrouter-site-url: ${OPENROUTER_SITE_URL:}
   openrouter-app-name: ${OPENROUTER_APP_NAME:SaveAPenny}
