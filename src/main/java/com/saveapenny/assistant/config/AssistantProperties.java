@@ -6,5 +6,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AssistantProperties(
         boolean enabled,
         int maxHistory,
-        String systemPrompt) {
+        String model,
+        String systemPrompt,
+        String provider,
+        String openrouterApiKey,
+        String openrouterBaseUrl,
+        String openrouterSiteUrl,
+        String openrouterAppName) {
 }

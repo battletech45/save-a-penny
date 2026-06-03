@@ -14,13 +14,6 @@ spring:
       - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
 
-  ai:
-    openai:
-      api-key: ${OPENAI_API_KEY:}
-      chat:
-        options:
-          model: gpt-4.1-mini
-
   datasource:
     url: jdbc:postgresql://localhost:5432/saveapenny
     username: ${DB_USERNAME}
@@ -38,8 +31,16 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+
 server:
   port: 8080
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
 
 management:
   endpoints:
@@ -55,10 +56,6 @@ logging:
     org.springframework: info
     org.hibernate.SQL: info
 
-security:
-  jwt:
-    secret: ${JWT_SECRET}
-
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -71,19 +68,15 @@ springdoc:
     try-it-out-enabled: true
     filter: true
 
-ocr:
-  enabled: true
-  tessdata-path: /opt/homebrew/share/tessdata
-  language: eng
-  psm: 3
-  max-file-size-bytes: 10485760
-  job-timeout-millis: 30000
-  max-retries: 2
-  debug-logging: false
-
 assistant:
   enabled: ${ASSISTANT_ENABLED:false}
   max-history: 8
+  model: ${ASSISTANT_MODEL:poolside/laguna-xs.2:free}
+  provider: ${ASSISTANT_AI_PROVIDER:openrouter}
+  openrouter-api-key: ${OPENROUTER_API_KEY:}
+  openrouter-base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
+  openrouter-site-url: ${OPENROUTER_SITE_URL:}
+  openrouter-app-name: ${OPENROUTER_APP_NAME:SaveAPenny}
   system-prompt: |
     You are SaveAPenny's finance and savings assistant.
     Give practical, concise budgeting and savings guidance.
@@ -93,3 +86,13 @@ assistant:
     Do not provide tax, legal, or investment advice.
     If the user asks for risky or regulated advice, clearly state the limitation
     and redirect to general budgeting guidance.
+
+ocr:
+  enabled: true
+  tessdata-path: /opt/homebrew/share/tessdata
+  language: eng
+  psm: 3
+  max-file-size-bytes: 10485760
+  job-timeout-millis: 30000
+  max-retries: 2
+  debug-logging: false
