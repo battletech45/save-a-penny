@@ -80,7 +80,13 @@ class AssistantServiceImplTest {
         assistantProperties = new AssistantProperties(
                 true,
                 2,
-                "Finance system prompt");
+                "gpt-4.1-mini",
+                "Finance system prompt",
+                "openai",
+                "",
+                "https://openrouter.ai/api",
+                "",
+                "SaveAPenny");
         financePromptBuilder = new FinancePromptBuilder();
 
         assistantService = new AssistantServiceImpl(
@@ -99,7 +105,7 @@ class AssistantServiceImplTest {
     void chat_throwsWhenAssistantDisabled() {
         AssistantServiceImpl disabledService = new AssistantServiceImpl(
                 chatClientProvider,
-                new AssistantProperties(false, 2, "Finance system prompt"),
+                new AssistantProperties(false, 2, "gpt-4.1-mini", "Finance system prompt", "openai", "", "https://openrouter.ai/api", "", "SaveAPenny"),
                 financePromptBuilder,
                 assistantReportTool,
                 assistantBudgetTool,
@@ -379,7 +385,7 @@ class AssistantServiceImplTest {
     void chat_ignoresPersistedHistory_whenMaxHistoryIsZero() {
         AssistantServiceImpl zeroHistoryService = new AssistantServiceImpl(
                 chatClientProvider,
-                new AssistantProperties(true, 0, "Finance system prompt"),
+                new AssistantProperties(true, 0, "gpt-4.1-mini", "Finance system prompt", "openai", "", "https://openrouter.ai/api", "", "SaveAPenny"),
                 financePromptBuilder,
                 assistantReportTool,
                 assistantBudgetTool,
