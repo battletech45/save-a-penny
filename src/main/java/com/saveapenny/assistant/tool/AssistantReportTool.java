@@ -3,6 +3,7 @@ package com.saveapenny.assistant.tool;
 import com.saveapenny.report.dto.CategorySpendingResponse;
 import com.saveapenny.report.dto.MonthlySummaryResponse;
 import com.saveapenny.report.service.ReportService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -16,17 +17,23 @@ public class AssistantReportTool {
 
     private final ReportService reportService;
     private final AssistantToolContextHolder assistantToolContextHolder;
+    private final Clock clock;
 
-    public AssistantReportTool(ReportService reportService, AssistantToolContextHolder assistantToolContextHolder) {
+    public AssistantReportTool(
+            ReportService reportService,
+            AssistantToolContextHolder assistantToolContextHolder,
+            Clock clock) {
         this.reportService = reportService;
         this.assistantToolContextHolder = assistantToolContextHolder;
+        this.clock = clock;
     }
 
     @Tool(name = "getCurrentMonthSummary", description = "Get the authenticated user's current month income, expense, and net savings summary.")
     public String getCurrentMonthSummary() {
         UUID userId = assistantToolContextHolder.requireCurrentUserId();
-        LocalDate from = LocalDate.now().withDayOfMonth(1);
-        LocalDate to = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
+        LocalDate from = today.withDayOfMonth(1);
+        LocalDate to = today;
 
         MonthlySummaryResponse summary = reportService.getMonthlySummary(userId, from, to);
         return "Current month summary: income="
@@ -42,13 +49,14 @@ public class AssistantReportTool {
     public String getTopSpendingCategories(
             @ToolParam(description = "Maximum number of categories to return.", required = false) int topCategoriesLimit) {
         UUID userId = assistantToolContextHolder.requireCurrentUserId();
-        LocalDate from = LocalDate.now().withDayOfMonth(1);
-        LocalDate to = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
+        LocalDate from = today.withDayOfMonth(1);
+        LocalDate to = today;
 
         List<CategorySpendingResponse> topCategories = reportService.getCategorySpending(userId, from, to)
                 .stream()
                 .sorted(Comparator.comparing(CategorySpendingResponse::getTotalAmount).reversed())
-                .limit(Math.max(0, topCategoriesLimit))
+                .limit(Math.max(1, topCategoriesLimit))
                 .toList();
 
         if (topCategories.isEmpty()) {

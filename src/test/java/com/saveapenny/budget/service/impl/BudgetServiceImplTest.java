@@ -25,6 +25,8 @@ import com.saveapenny.transaction.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -168,6 +170,49 @@ class BudgetServiceImplTest {
     }
 
     @Test
+    void getStatuses_batchesCategoryAndTransactionLookups() {
+        UUID secondBudgetId = UUID.randomUUID();
+        UUID secondCategoryId = UUID.randomUUID();
+        Budget secondBudget = Budget.builder()
+                .id(secondBudgetId)
+                .userId(userId)
+                .categoryId(secondCategoryId)
+                .amount(new BigDecimal("200.0000"))
+                .period(BudgetPeriod.MONTHLY)
+                .startDate(LocalDate.of(2026, 5, 10))
+                .endDate(LocalDate.of(2026, 5, 20))
+                .createdAt(OffsetDateTime.now().minusDays(1))
+                .updatedAt(OffsetDateTime.now())
+                .build();
+
+        when(budgetRepository.findAllByUserIdAndPeriod(userId, BudgetPeriod.MONTHLY, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(budget, secondBudget)));
+        when(categoryRepository.findAllById(any())).thenReturn(List.of(
+                Category.builder().id(categoryId).name("Food").userId(userId).build(),
+                Category.builder().id(secondCategoryId).name("Transport").userId(userId).build()));
+        when(transactionRepository.sumDailyAmountByUserIdAndCategoryIdsAndTypeAndTransactionDateBetween(
+                any(UUID.class),
+                any(List.class),
+                any(TransactionType.class),
+                any(LocalDate.class),
+                any(LocalDate.class)))
+                .thenReturn(List.of(
+                        dailyTotal(categoryId, LocalDate.of(2026, 5, 10), new BigDecimal("50.00")),
+                        dailyTotal(categoryId, LocalDate.of(2026, 5, 11), new BigDecimal("30.00")),
+                        dailyTotal(secondCategoryId, LocalDate.of(2026, 5, 15), new BigDecimal("40.00"))));
+
+        var result = budgetService.getStatuses(userId, BudgetPeriod.MONTHLY, PageRequest.of(0, 20));
+
+        assertEquals(2, result.getContent().size());
+        assertEquals("Food", result.getContent().get(0).getCategory());
+        assertEquals(new BigDecimal("80.00"), result.getContent().get(0).getSpentAmount());
+        assertEquals("Transport", result.getContent().get(1).getCategory());
+        assertEquals(new BigDecimal("40.00"), result.getContent().get(1).getSpentAmount());
+        verify(transactionRepository, never()).sumAmountByUserIdAndCategoryIdAndTypeAndTransactionDateBetween(
+                any(UUID.class), any(UUID.class), any(TransactionType.class), any(LocalDate.class), any(LocalDate.class));
+    }
+
+    @Test
     void update_throws_whenDuplicateExists() {
         UpdateBudgetRequest request = UpdateBudgetRequest.builder()
                 .categoryId(categoryId)
@@ -189,5 +234,27 @@ class BudgetServiceImplTest {
 
         assertThrows(BudgetAlreadyExistsException.class, () -> budgetService.update(userId, budgetId, request));
         verify(budgetMapper, never()).updateEntity(any(Budget.class), any(UpdateBudgetRequest.class));
+    }
+
+    private TransactionRepository.CategoryDailyExpenseTotal dailyTotal(
+            UUID categoryId,
+            LocalDate transactionDate,
+            BigDecimal totalAmount) {
+        return new TransactionRepository.CategoryDailyExpenseTotal() {
+            @Override
+            public UUID getCategoryId() {
+                return categoryId;
+            }
+
+            @Override
+            public LocalDate getTransactionDate() {
+                return transactionDate;
+            }
+
+            @Override
+            public BigDecimal getTotalAmount() {
+                return totalAmount;
+            }
+        };
     }
 }

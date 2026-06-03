@@ -1,6 +1,5 @@
 package com.saveapenny.assistant.tool;
 
-import com.saveapenny.budget.dto.BudgetResponse;
 import com.saveapenny.budget.dto.BudgetStatusResponse;
 import com.saveapenny.budget.entity.BudgetPeriod;
 import com.saveapenny.budget.service.BudgetService;
@@ -26,7 +25,7 @@ public class AssistantBudgetTool {
     public String getMonthlyBudgetStatus(
             @ToolParam(description = "Maximum number of budget entries to include.", required = false) int limit) {
         UUID userId = assistantToolContextHolder.requireCurrentUserId();
-        Page<BudgetResponse> budgets = budgetService.getAll(
+        Page<BudgetStatusResponse> budgets = budgetService.getStatuses(
                 userId,
                 BudgetPeriod.MONTHLY,
                 PageRequest.of(0, Math.max(1, limit)));
@@ -37,7 +36,7 @@ public class AssistantBudgetTool {
 
         StringBuilder builder = new StringBuilder("Monthly budget status: ");
         for (int i = 0; i < budgets.getContent().size(); i++) {
-            BudgetStatusResponse status = budgetService.getStatus(userId, budgets.getContent().get(i).getId());
+            BudgetStatusResponse status = budgets.getContent().get(i);
             if (i > 0) {
                 builder.append("; ");
             }
