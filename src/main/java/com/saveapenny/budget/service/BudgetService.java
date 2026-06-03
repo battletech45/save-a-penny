@@ -19,6 +19,8 @@ public interface BudgetService {
 
     BudgetStatusResponse getStatus(UUID currentUserId, UUID budgetId);
 
+    Page<BudgetStatusResponse> getStatuses(UUID currentUserId, BudgetPeriod period, Pageable pageable);
+
     BudgetResponse update(UUID currentUserId, UUID budgetId, UpdateBudgetRequest request);
 
     void delete(UUID currentUserId, UUID budgetId);

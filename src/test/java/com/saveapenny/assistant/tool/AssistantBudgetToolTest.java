@@ -3,12 +3,10 @@ package com.saveapenny.assistant.tool;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-import com.saveapenny.budget.dto.BudgetResponse;
 import com.saveapenny.budget.dto.BudgetStatusResponse;
 import com.saveapenny.budget.entity.BudgetPeriod;
 import com.saveapenny.budget.service.BudgetService;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -30,23 +28,15 @@ class AssistantBudgetToolTest {
     @Test
     void buildCurrentBudgetContext_returnsCompactBudgetStatusLines() {
         UUID userId = UUID.randomUUID();
-        UUID budgetId = UUID.randomUUID();
         when(assistantToolContextHolder.requireCurrentUserId()).thenReturn(userId);
-        when(budgetService.getAll(userId, BudgetPeriod.MONTHLY, PageRequest.of(0, 3)))
-                .thenReturn(new PageImpl<>(List.of(BudgetResponse.builder()
-                        .id(budgetId)
-                        .amount(new BigDecimal("800.00"))
-                        .period(BudgetPeriod.MONTHLY)
-                        .startDate(LocalDate.now().withDayOfMonth(1))
-                        .endDate(LocalDate.now())
+        when(budgetService.getStatuses(userId, BudgetPeriod.MONTHLY, PageRequest.of(0, 3)))
+                .thenReturn(new PageImpl<>(List.of(BudgetStatusResponse.builder()
+                        .category("Food")
+                        .budgetAmount(new BigDecimal("800.00"))
+                        .spentAmount(new BigDecimal("500.00"))
+                        .remainingAmount(new BigDecimal("300.00"))
+                        .status("ON_TRACK")
                         .build())));
-        when(budgetService.getStatus(userId, budgetId)).thenReturn(BudgetStatusResponse.builder()
-                .category("Food")
-                .budgetAmount(new BigDecimal("800.00"))
-                .spentAmount(new BigDecimal("500.00"))
-                .remainingAmount(new BigDecimal("300.00"))
-                .status("ON_TRACK")
-                .build());
 
         AssistantBudgetTool tool = new AssistantBudgetTool(budgetService, assistantToolContextHolder);
 

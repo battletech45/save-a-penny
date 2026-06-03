@@ -4,6 +4,7 @@ import com.saveapenny.transaction.entity.Transaction;
 import com.saveapenny.transaction.entity.TransactionType;
 import java.time.LocalDate;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -69,4 +70,30 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
             @Param("type") TransactionType type,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    @Query("""
+            select t.categoryId as categoryId,
+                   t.transactionDate as transactionDate,
+                   coalesce(sum(t.amount), 0) as totalAmount
+            from Transaction t
+            where t.userId = :userId
+              and t.categoryId in :categoryIds
+              and t.type = :type
+              and t.transactionDate between :from and :to
+            group by t.categoryId, t.transactionDate
+            """)
+    List<CategoryDailyExpenseTotal> sumDailyAmountByUserIdAndCategoryIdsAndTypeAndTransactionDateBetween(
+            @Param("userId") UUID userId,
+            @Param("categoryIds") List<UUID> categoryIds,
+            @Param("type") TransactionType type,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    interface CategoryDailyExpenseTotal {
+        UUID getCategoryId();
+
+        LocalDate getTransactionDate();
+
+        BigDecimal getTotalAmount();
+    }
 }
