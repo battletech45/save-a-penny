@@ -2,6 +2,7 @@ package com.saveapenny.assistant.tool;
 
 import com.saveapenny.transaction.dto.TransactionResponse;
 import com.saveapenny.transaction.service.TransactionService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -17,22 +18,26 @@ public class AssistantTransactionTool {
 
     private final TransactionService transactionService;
     private final AssistantToolContextHolder assistantToolContextHolder;
+    private final Clock clock;
 
     public AssistantTransactionTool(
             TransactionService transactionService,
-            AssistantToolContextHolder assistantToolContextHolder) {
+            AssistantToolContextHolder assistantToolContextHolder,
+            Clock clock) {
         this.transactionService = transactionService;
         this.assistantToolContextHolder = assistantToolContextHolder;
+        this.clock = clock;
     }
 
     @Tool(name = "getRecentTransactions", description = "Get the authenticated user's recent transactions from the last 30 days.")
     public String getRecentTransactions(
             @ToolParam(description = "Maximum number of transactions to include.", required = false) int limit) {
         UUID userId = assistantToolContextHolder.requireCurrentUserId();
+        LocalDate today = LocalDate.now(clock);
         Page<TransactionResponse> page = transactionService.getAll(
                 userId,
-                LocalDate.now().minusDays(30),
-                LocalDate.now(),
+                today.minusDays(30),
+                today,
                 null,
                 null,
                 null,
