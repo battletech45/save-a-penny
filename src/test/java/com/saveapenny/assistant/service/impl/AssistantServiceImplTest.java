@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,10 +24,8 @@ import com.saveapenny.assistant.exception.AssistantProcessingException;
 import com.saveapenny.assistant.prompt.FinancePromptBuilder;
 import com.saveapenny.assistant.repository.AssistantChatMessageRepository;
 import com.saveapenny.assistant.repository.AssistantChatSessionRepository;
-import com.saveapenny.assistant.tool.AssistantBudgetTool;
-import com.saveapenny.assistant.tool.AssistantReportTool;
 import com.saveapenny.assistant.tool.AssistantToolContextHolder;
-import com.saveapenny.assistant.tool.AssistantTransactionTool;
+import com.saveapenny.mcp.adapter.springai.SpringAiMcpToolAdapter;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -54,13 +53,7 @@ class AssistantServiceImplTest {
     private ObjectProvider<ChatClient> chatClientProvider;
 
     @Mock
-    private AssistantReportTool assistantReportTool;
-
-    @Mock
-    private AssistantBudgetTool assistantBudgetTool;
-
-    @Mock
-    private AssistantTransactionTool assistantTransactionTool;
+    private SpringAiMcpToolAdapter springAiMcpToolAdapter;
 
     @Mock
     private AssistantToolContextHolder assistantToolContextHolder;
@@ -93,9 +86,7 @@ class AssistantServiceImplTest {
                 chatClientProvider,
                 assistantProperties,
                 financePromptBuilder,
-                assistantReportTool,
-                assistantBudgetTool,
-                assistantTransactionTool,
+                springAiMcpToolAdapter,
                 assistantToolContextHolder,
                 assistantChatSessionRepository,
                 assistantChatMessageRepository);
@@ -107,9 +98,7 @@ class AssistantServiceImplTest {
                 chatClientProvider,
                 new AssistantProperties(false, 2, "gpt-4.1-mini", "Finance system prompt", "openai", "", "https://openrouter.ai/api", "", "SaveAPenny"),
                 financePromptBuilder,
-                assistantReportTool,
-                assistantBudgetTool,
-                assistantTransactionTool,
+                springAiMcpToolAdapter,
                 assistantToolContextHolder,
                 assistantChatSessionRepository,
                 assistantChatMessageRepository);
@@ -143,7 +132,7 @@ class AssistantServiceImplTest {
         ArgumentCaptor<org.springframework.ai.chat.prompt.Prompt> promptCaptor =
                 ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
         verify(chatClient, atLeastOnce()).prompt(promptCaptor.capture());
-        verify(requestSpec).tools(any(Object[].class));
+        verify(requestSpec).tools(same(springAiMcpToolAdapter));
 
         assertEquals(session.getId(), response.getSessionId());
         assertEquals("Reduce discretionary spending first.", response.getReply());
@@ -387,9 +376,7 @@ class AssistantServiceImplTest {
                 chatClientProvider,
                 new AssistantProperties(true, 0, "gpt-4.1-mini", "Finance system prompt", "openai", "", "https://openrouter.ai/api", "", "SaveAPenny"),
                 financePromptBuilder,
-                assistantReportTool,
-                assistantBudgetTool,
-                assistantTransactionTool,
+                springAiMcpToolAdapter,
                 assistantToolContextHolder,
                 assistantChatSessionRepository,
                 assistantChatMessageRepository);

@@ -14,10 +14,8 @@ import com.saveapenny.assistant.prompt.FinancePromptBuilder.PromptPayload;
 import com.saveapenny.assistant.repository.AssistantChatMessageRepository;
 import com.saveapenny.assistant.repository.AssistantChatSessionRepository;
 import com.saveapenny.assistant.service.AssistantService;
-import com.saveapenny.assistant.tool.AssistantBudgetTool;
-import com.saveapenny.assistant.tool.AssistantReportTool;
 import com.saveapenny.assistant.tool.AssistantToolContextHolder;
-import com.saveapenny.assistant.tool.AssistantTransactionTool;
+import com.saveapenny.mcp.adapter.springai.SpringAiMcpToolAdapter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -43,9 +41,7 @@ public class AssistantServiceImpl implements AssistantService {
     private final ObjectProvider<ChatClient> chatClientProvider;
     private final AssistantProperties assistantProperties;
     private final FinancePromptBuilder financePromptBuilder;
-    private final AssistantReportTool assistantReportTool;
-    private final AssistantBudgetTool assistantBudgetTool;
-    private final AssistantTransactionTool assistantTransactionTool;
+    private final SpringAiMcpToolAdapter springAiMcpToolAdapter;
     private final AssistantToolContextHolder assistantToolContextHolder;
     private final AssistantChatSessionRepository assistantChatSessionRepository;
     private final AssistantChatMessageRepository assistantChatMessageRepository;
@@ -54,18 +50,14 @@ public class AssistantServiceImpl implements AssistantService {
             ObjectProvider<ChatClient> chatClientProvider,
             AssistantProperties assistantProperties,
             FinancePromptBuilder financePromptBuilder,
-            AssistantReportTool assistantReportTool,
-            AssistantBudgetTool assistantBudgetTool,
-            AssistantTransactionTool assistantTransactionTool,
+            SpringAiMcpToolAdapter springAiMcpToolAdapter,
             AssistantToolContextHolder assistantToolContextHolder,
             AssistantChatSessionRepository assistantChatSessionRepository,
             AssistantChatMessageRepository assistantChatMessageRepository) {
         this.chatClientProvider = chatClientProvider;
         this.assistantProperties = assistantProperties;
         this.financePromptBuilder = financePromptBuilder;
-        this.assistantReportTool = assistantReportTool;
-        this.assistantBudgetTool = assistantBudgetTool;
-        this.assistantTransactionTool = assistantTransactionTool;
+        this.springAiMcpToolAdapter = springAiMcpToolAdapter;
         this.assistantToolContextHolder = assistantToolContextHolder;
         this.assistantChatSessionRepository = assistantChatSessionRepository;
         this.assistantChatMessageRepository = assistantChatMessageRepository;
@@ -92,7 +84,7 @@ public class AssistantServiceImpl implements AssistantService {
 
             assistantToolContextHolder.setCurrentUserId(userId);
             String reply = chatClient.prompt(toPrompt(payload))
-                    .tools(assistantReportTool, assistantBudgetTool, assistantTransactionTool)
+                    .tools(springAiMcpToolAdapter)
                     .call()
                     .content();
 
