@@ -205,13 +205,40 @@ The project uses `tess4j`, which requires native Tesseract binaries and language
 - Verify native library exists: `ls "$(brew --prefix tesseract)/lib/libtesseract.dylib"`
 - Verify tessdata path exists: `ls /opt/homebrew/share/tessdata`
 - Ensure `ocr.tessdata-path` matches your machine path.
-- Start the app with native access and JNA path configured:
 
-```bash
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Djna.library.path=$(brew --prefix tesseract)/lib --enable-native-access=ALL-UNNAMED"
+#### `pom.xml` JNA path is hardcoded to the contributor's machine
+
+`pom.xml` configures `jna.library.path` (and `java.library.path` for tests) plus
+`--enable-native-access=ALL-UNNAMED` for both the `spring-boot-maven-plugin` and
+the `maven-surefire-plugin`. The current default is the Apple Silicon Homebrew
+path, so on most local setups you can run `mvn spring-boot:run` and `mvn test`
+without passing any extra JNA flags.
+
+Default values in `pom.xml`:
+
+```xml
+<systemPropertyVariables>
+    <jna.library.path>/opt/homebrew/lib</jna.library.path>
+    <java.library.path>/opt/homebrew/lib</java.library.path>
+</systemPropertyVariables>
+<argLine>--enable-native-access=ALL-UNNAMED</argLine>
 ```
 
-- Required application property:
+> **If your Tesseract native library lives elsewhere, update these paths in
+> `pom.xml` to match your machine.** The hardcoded value assumes
+> `/opt/homebrew/lib` (Apple Silicon Homebrew). Common alternatives:
+>
+> - Intel Homebrew: `/usr/local/lib`
+> - Linux package manager: `/usr/lib` (or `/usr/lib/x86_64-linux-gnu`)
+> - Custom build: directory containing `libtesseract.dylib` / `libtesseract.so`
+>
+> Alternatively, override at runtime without editing `pom.xml`:
+>
+> ```bash
+> mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Djna.library.path=$(brew --prefix tesseract)/lib --enable-native-access=ALL-UNNAMED"
+> ```
+
+- Required application property (update if your tessdata path differs):
 
 ```properties
 ocr.tessdata-path=/opt/homebrew/share/tessdata
