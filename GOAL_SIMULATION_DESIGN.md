@@ -1,30 +1,30 @@
 # Goal Simulation Design (Phase 0)
 
-This document is the Phase 0 design lock-in for the goal simulation feature. It captures the goal type catalog, scenario input schema, simulation output schema, MCP tool risk classification, and the open questions list that gates Phase 1.
+This document is the Phase 0 design lock-in for the goal simulation feature. It captures the goal type catalog, scenario input schema, simulation output schema, MCP tool risk classification, and the open questions list that must be resolved before Phase 1 starts.
 
-It is a sign-off artifact. Code, migrations, and tool implementations are deferred to Phase 1 onwards.
+It is a planning artifact only. Code, migrations, handlers, and scheduled jobs are explicitly out of scope for this document.
 
-The schema names in this document are the source of truth for the entity classes, JSON column shapes, and MCP tool input/output contracts that follow.
+The schema names in this document are the source of truth for the entities, JSON shapes, and MCP tool contracts that follow.
 
 ## 1. Conventions
 
-These conventions apply to every section in this document.
+These conventions apply throughout the design.
 
 - **Currency**: ISO 4217 three-letter codes stored as `VARCHAR(3)`.
 - **Money**: `DECIMAL(19,4)` in storage, `BigDecimal` in Java, never `double`.
 - **Dates**: `LocalDate` in Java, `DATE` in PostgreSQL, ISO-8601 strings on the wire.
 - **Timestamps**: `OffsetDateTime` in Java, `TIMESTAMP WITH TIME ZONE` in PostgreSQL.
 - **IDs**: `UUID`.
-- **Enum storage**: `VARCHAR` with `@Enumerated(EnumType.STRING)`. Snake case values in the database, upper snake case in the JSON.
-- **Status enums**: status fields use a closed lifecycle enum, not free-form strings.
-- **Amount sign convention**: all positive numbers. Direction is implied by the goal type field, not by sign.
-- **JSON columns**: `JSONB` for input snapshots, output snapshots, and scenario input overrides. Schema is enforced at the application layer, not the database.
+- **Enum storage**: `VARCHAR` with `@Enumerated(EnumType.STRING)`. Snake case in the database, upper snake case in JSON.
+- **Status enums**: lifecycle fields use closed enums, not free-form strings.
+- **Amount sign convention**: all amounts are positive numbers. Direction is implied by goal type, not sign.
+- **JSON columns**: `JSONB` for goal inputs, scenario overrides, and simulation outputs. Validation happens in the application layer.
 
 ## 2. Goal Type Catalog
 
-The catalog defines the five goal types that ship in v1. Each entry has a stable identifier, a one-line definition, the user-facing required and optional inputs, defaults the engine uses when the user omits an input, the model the engine uses, and example prompts the agent must be able to handle.
+The v1 catalog contains five goal types. Each type has a stable identifier, required and optional inputs, engine defaults, feasibility rules, and example prompts.
 
-The stable identifier is what appears in the URL, the database, the JSON wire format, and the MCP tool input. Do not rename without a migration path.
+The stable identifier is used in URLs, persistence, JSON contracts, and MCP tool inputs. It must not change without a migration path.
 
 ### 2.1 `SAVINGS`
 
@@ -40,15 +40,15 @@ Reach a target amount by a target date by accumulating contributions, optionally
   - `startBalance` (number, >= 0, default 0)
 - **Engine model**: future value of an annuity with optional compounding.
 
-```
+```text
 final = (startBalance * (1 + r)^n) + contribution * (((1 + r)^n - 1) / r)
 ```
 
 Where `n` is months, `r` is monthly rate, and `r = 0` short-circuits to linear accumulation.
 
-- **Required monthly contribution** (when not supplied):
+- **Required monthly contribution** when not supplied:
 
-```
+```text
 if r == 0: required = (targetAmount - startBalance) / n
 else:      required = (targetAmount - startBalance * (1 + r)^n) * r / ((1 + r)^n - 1)
 ```
@@ -75,8 +75,8 @@ Pay off an existing debt by a target date, given the current balance, APR, and m
   - `minimumPayment` (number, > 0, defaults to interest-only plus 1% of balance if missing)
   - `monthlyBudget` (number, >= minimumPayment)
   - `targetPayoffDate` (date, > today)
-  - `fixedPayment` (number, > 0) - alternative to monthly budget
-- **Engine model**: amortization schedule with month-end compounding. Iterative monthly loop until balance <= 0 or target date is reached.
+  - `fixedPayment` (number, > 0) as an alternative to `monthlyBudget`
+- **Engine model**: amortization schedule with month-end compounding. Iterative monthly loop until balance `<= 0` or target date is reached.
 - **Feasibility rules**:
   - `INFEASIBLE` if `minimumPayment` is less than the monthly interest charge.
   - `INFEASIBLE` if `fixedPayment` is less than the monthly interest charge.
@@ -106,7 +106,7 @@ Accumulate a down payment toward a future purchase, or determine when a recurrin
 - **Engine model**: same accumulation model as `SAVINGS`, applied to the down payment target. Inflation adjusts the target price before solving.
 - **Derived target**:
 
-```
+```text
 inflatedPrice = targetPrice * (1 + inflation)^n_years
 requiredDownPayment = inflatedPrice * downPaymentPercent / 100
 ```
@@ -132,20 +132,20 @@ Project whether the user's current retirement savings and contributions are on t
   - `expectedInflation` (number, percent, 0 to 100, default 3)
   - `desiredMonthlyIncomeInRetirement` (number, > 0, in today's currency)
   - `lifeExpectancy` (integer, > targetRetirementAge, default 85)
-  - `withdrawalRate` (number, percent, 0 to 100, default 4) - used to back-solve the required nest egg
-- **Engine model**: compound growth of retirement savings until retirement, then a sustainable withdrawal calculation.
+  - `withdrawalRate` (number, percent, 0 to 100, default 4)
+- **Engine model**: compound growth of retirement savings until retirement using a nominal annual return assumption, then a sustainable withdrawal calculation. Inflation is modeled separately when converting the desired retirement income from today's currency into the retirement-date target nest egg.
 - **Required nest egg**:
 
-```
+```text
 requiredNestEgg = (desiredMonthlyIncomeInRetirement * 12) / (withdrawalRate / 100)
 requiredNestEggInFutureValue = requiredNestEgg * (1 + expectedInflation)^yearsToRetirement
 ```
 
-- **Projected nest egg**: same formula as `SAVINGS` accumulation with `expectedAnnualReturn`.
+- **Projected nest egg**: same accumulation formula as `SAVINGS`, using `expectedAnnualReturn`.
 - **Feasibility rules**:
   - `INFEASIBLE` if required nest egg exceeds projected nest egg by more than 50%.
-  - `AT_RISK` if required nest egg exceeds projected by 10% to 50%.
-  - `TIGHT` if required nest egg exceeds projected by 0% to 10%.
+  - `AT_RISK` if required nest egg exceeds projected nest egg by 10% to 50%.
+  - `TIGHT` if required nest egg exceeds projected nest egg by 0% to 10%.
   - `ON_TRACK` otherwise.
 - **Example prompts**:
   - "Will I be able to retire at 65 with $3,000 a month?"
@@ -165,16 +165,16 @@ Reach a target monthly net income by a target date, given the user's current ave
   - `expectedIncomeGrowthRate` (number, percent, 0 to 100, default 0)
   - `incomeStrategy` (string, `LINEAR` or `COMPOUND`, default `COMPOUND`)
 - **Engine model**: linear or compound growth from current income to target.
-- **Required monthly growth** (linear):
+- **Required monthly growth** for `LINEAR`:
 
-```
+```text
 delta = targetMonthlyNetIncome - currentAverageMonthlyNetIncome
 requiredMonthlyChange = delta / monthsRemaining
 ```
 
-- **Required monthly growth** (compound):
+- **Required monthly growth** for `COMPOUND`:
 
-```
+```text
 requiredMonthlyGrowthRate = (targetMonthlyNetIncome / currentAverageMonthlyNetIncome)^(1 / monthsRemaining) - 1
 ```
 
@@ -190,9 +190,9 @@ requiredMonthlyGrowthRate = (targetMonthlyNetIncome / currentAverageMonthlyNetIn
 
 ## 3. Goal Status Lifecycle
 
-All goal types share the same status lifecycle.
+All goal types share the same lifecycle.
 
-```
+```text
 DRAFT -> ACTIVE -> ACHIEVED
               \-> ABANDONED
 ```
@@ -200,15 +200,15 @@ DRAFT -> ACTIVE -> ACHIEVED
 | Status | Meaning | Allowed transitions |
 | --- | --- | --- |
 | `DRAFT` | Goal created by the agent, not yet confirmed by the user. | `DRAFT -> ACTIVE`, `DRAFT -> ABANDONED` |
-| `ACTIVE` | User confirmed the goal. Tracked by the progress job. | `ACTIVE -> ACHIEVED`, `ACTIVE -> ABANDONED` |
-| `ACHIEVED` | Terminal. Set automatically when the progress job detects the goal target is met. | None |
-| `ABANDONED` | Terminal. User or system gave up. | None |
+| `ACTIVE` | User confirmed the goal. Tracked by the progress job in later phases. | `ACTIVE -> ACHIEVED`, `ACTIVE -> ABANDONED` |
+| `ACHIEVED` | Terminal. Set automatically when the system detects the target is met. | None |
+| `ABANDONED` | Terminal. User or system gave up on the goal. | None |
 
-The progress job in Phase 6 is the only component that transitions `ACTIVE -> ACHIEVED`. All other transitions are user-initiated through a write tool.
+Status transitions are enforced in application logic, not by free-form user input.
 
 ## 4. Entity Shapes (Phase 1 Targets)
 
-These are the entity shapes the implementation will produce. They are not code in Phase 0, but they are the contract for Phase 1.
+These are the Phase 1 persistence contracts. They are design targets, not code.
 
 ### 4.1 `GoalEntity` (table `goals`)
 
@@ -218,12 +218,13 @@ These are the entity shapes the implementation will produce. They are not code i
 | `user_id` | UUID NOT NULL | ownership |
 | `type` | VARCHAR(32) NOT NULL | one of the five goal types |
 | `title` | VARCHAR(120) NOT NULL | user-provided or agent-suggested |
-| `target_amount` | DECIMAL(19,4) NOT NULL | |
+| `target_amount` | DECIMAL(19,4) NOT NULL | normalized headline target |
 | `currency` | VARCHAR(3) NOT NULL | |
 | `target_date` | DATE NOT NULL | |
 | `linked_account_id` | UUID NULL | optional, must be owned by `user_id` |
 | `status` | VARCHAR(16) NOT NULL | from the lifecycle |
-| `inputs_json` | JSONB NOT NULL | type-specific inputs (see Section 5) |
+| `inputs_json` | JSONB NOT NULL | type-specific inputs |
+| `deleted_at` | TIMESTAMPTZ NULL | soft delete marker |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 
@@ -236,11 +237,11 @@ Indexes: `(user_id)`, `(user_id, status)`, `(user_id, type)`.
 | `id` | UUID PK | |
 | `goal_id` | UUID NOT NULL FK -> `goals.id` | |
 | `name` | VARCHAR(80) NOT NULL | |
-| `inputs_json` | JSONB NOT NULL | overrides (see Section 5) |
+| `inputs_json` | JSONB NOT NULL | overrides |
 | `is_baseline` | BOOLEAN NOT NULL | exactly one true per goal |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 
-Constraint: `UNIQUE (goal_id) WHERE is_baseline = true` for the baseline invariant.
+Constraint: `UNIQUE (goal_id) WHERE is_baseline = true`.
 
 ### 4.3 `GoalRunEntity` (table `goal_runs`)
 
@@ -249,24 +250,23 @@ Constraint: `UNIQUE (goal_id) WHERE is_baseline = true` for the baseline invaria
 | `id` | UUID PK | |
 | `goal_id` | UUID NOT NULL FK -> `goals.id` | |
 | `scenario_id` | UUID NOT NULL FK -> `goal_scenarios.id` | |
-| `inputs_snapshot_json` | JSONB NOT NULL | full input snapshot, frozen at run time |
-| `output_json` | JSONB NOT NULL | full output, frozen at run time (see Section 6) |
+| `inputs_snapshot_json` | JSONB NOT NULL | full input snapshot frozen at run time |
+| `output_summary_json` | JSONB NOT NULL | compact output persisted for every run |
+| `output_series_json` | JSONB NULL | full month-by-month series only when persisted |
 | `feasibility` | VARCHAR(16) NOT NULL | cached feasibility for cheap queries |
 | `triggered_by` | VARCHAR(16) NOT NULL | `USER`, `AGENT`, `PROGRESS_JOB`, `WHAT_IF` |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
 
 Constraint: append-only. No `UPDATE` or `DELETE` outside administrative tooling.
 
-The `output_json` stores a compressed summary, not the full month-by-month series. The full series is available in the API response and is also kept as a sibling JSONB column for high-fidelity display:
+Storage policy:
 
-- `output_summary_json` (always written): feasibility, required contribution, projected outcome, top-level assumptions, top warnings.
-- `output_series_json` (only written for runs from `AGENT` or `USER` with `persistSeries=true`): full month-by-month series.
-
-This split keeps the runs table small while still allowing full history when the user asked for it.
+- `output_summary_json` is always written.
+- `output_series_json` is only written when the caller explicitly asks to persist the full series.
 
 ## 5. Scenario Input Schema
 
-The `inputs_json` column on `GoalEntity` and `ScenarioEntity` is a versioned JSON document. The version is required and validated by the engine.
+The `inputs_json` field on `GoalEntity` and `ScenarioEntity` is a versioned JSON document.
 
 ```json
 {
@@ -283,15 +283,20 @@ The `inputs_json` column on `GoalEntity` and `ScenarioEntity` is a versioned JSO
 }
 ```
 
-A scenario `inputs_json` has the same shape, plus an optional `name`. The scenario may omit any field that is identical to the parent goal. The engine merges the goal inputs with the scenario overrides before simulation.
+A scenario uses the same shape and may omit any field that is identical to the parent goal. The engine merges goal inputs with scenario overrides before simulation.
 
-Field validation per goal type is documented in Section 2. The engine refuses to run if validation fails, and the MCP tool returns `VALIDATION_ERROR`.
+Rules:
 
-A `version` bump is required whenever a goal type's input shape changes. The engine must support the current version and reject older versions with a clear error.
+- `version` is required.
+- `type` is required and must match the parent goal type for scenarios.
+- `values` contains the per-goal-type fields.
+- Validation rules come from Section 2.
+- The engine rejects invalid inputs with `VALIDATION_ERROR`.
+- A version bump is required whenever a goal type input shape changes.
 
 ## 6. Simulation Output Schema
 
-The output is a single JSON document with a common envelope and a type-specific payload. The envelope is stable; the payload can grow per type.
+The output is a single JSON document with a common envelope and a type-specific payload.
 
 ```json
 {
@@ -333,53 +338,50 @@ The output is a single JSON document with a common envelope and a type-specific 
 | --- | --- | --- |
 | `version` | integer | output schema version, starts at 1 |
 | `type` | string | echoes the goal type |
-| `feasibility` | enum | one of `ON_TRACK`, `TIGHT`, `AT_RISK`, `INFEASIBLE` |
-| `asOf` | date | run timestamp, the first day of the projection |
-| `horizonMonths` | integer | months from `asOf` to `targetDate` |
+| `feasibility` | enum | `ON_TRACK`, `TIGHT`, `AT_RISK`, `INFEASIBLE` |
+| `asOf` | timestamp | run timestamp |
+| `horizonMonths` | integer | months from `asOf` to target date |
 | `currency` | string | ISO 4217, matches the goal |
-| `summary` | object | the headline numbers |
-| `assumptions` | object | the inputs the engine used (so the user can audit) |
+| `summary` | object | headline numbers |
+| `assumptions` | object | explicit inputs used by the engine |
 | `warnings` | array | structured warnings |
 | `series` | array | month-by-month projection points |
 
-### 6.2 Feasibility
+### 6.2 Summary Per Type
 
-A single value for cheap filtering and UI rendering. The engine produces this from the per-type rules in Section 2. If the goal is `INFEASIBLE`, `summary.requiredMonthlyContribution` is still set, even if it is unreasonable. The UI can decide how to display that.
+Common summary fields:
 
-### 6.3 Summary Per Type
+- `targetAmount`
+- `projectedAmount`
+- `shortfall`
+- `requiredMonthlyContribution`
+- `currentMonthlyContribution` (optional)
 
-The `summary` object is type-specific. Common fields:
+Type adjustments:
 
-- `targetAmount` (number): the goal target in `currency`
-- `projectedAmount` (number): where the user would land at `targetDate` under the current scenario
-- `shortfall` (number): `targetAmount - projectedAmount`. Negative means surplus.
-- `requiredMonthlyContribution` (number): what the user needs to do, in `currency`
-- `currentMonthlyContribution` (number, optional): what the user is doing today, in `currency`
+- `RETIREMENT` uses `requiredNestEgg` and `projectedNestEgg`.
+- `INCOME_TARGET` uses `requiredMonthlyGrowthRate` and `currentMonthlyGrowthRate`.
 
-`RETIREMENT` replaces `targetAmount` with `requiredNestEgg` and `projectedAmount` with `projectedNestEgg`.
+### 6.3 Assumptions
 
-`INCOME_TARGET` replaces these with `requiredMonthlyGrowthRate` and `currentMonthlyGrowthRate`.
-
-### 6.4 Assumptions
-
-`assumptions` is always present, even when values are zero. Recording the inputs is non-negotiable. The user must be able to see exactly what the engine assumed.
+`assumptions` is always present, even when a value is zero.
 
 Common fields:
 
-- `expectedAnnualReturn` (number, percent)
-- `startBalance` (number)
-- `averageMonthlyNetIncome` (number, in `currency`)
-- `averageMonthlyExpense` (number, in `currency`)
+- `expectedAnnualReturn`
+- `startBalance`
+- `averageMonthlyNetIncome`
+- `averageMonthlyExpense`
 
-`DEBT_PAYOFF` adds `apr`, `minimumPayment`, `interestOnlyMonthlyInterest`.
+Type-specific additions:
 
-`RETIREMENT` adds `expectedInflation`, `lifeExpectancy`, `withdrawalRate`.
+- `DEBT_PAYOFF`: `apr`, `minimumPayment`, `interestOnlyMonthlyInterest`
+- `RETIREMENT`: `expectedInflation`, `lifeExpectancy`, `withdrawalRate`
+- `INCOME_TARGET`: `incomeStrategy`, `expectedIncomeGrowthRate`
 
-`INCOME_TARGET` adds `incomeStrategy`, `expectedIncomeGrowthRate`.
+### 6.4 Warnings
 
-### 6.5 Warnings
-
-A warning is a structured code plus a human-readable message. The codes are closed and stable.
+Warning codes are closed and stable.
 
 | Code | Meaning |
 | --- | --- |
@@ -389,52 +391,55 @@ A warning is a structured code plus a human-readable message. The codes are clos
 | `HIGH_APR` | `apr` >= 25%. |
 | `NEGATIVE_CASH_FLOW` | Average expense exceeds average income. |
 | `INFLATION_NOT_SPECIFIED` | `RETIREMENT` or `PURCHASE` without an inflation input. |
-| `WITHDRAWAL_RATE_OUT_OF_RANGE` | `withdrawalRate` < 2% or > 8% for `RETIREMENT`. |
-| `LONG_HORIZON` | Horizon > 480 months (40 years). |
+| `WITHDRAWAL_RATE_OUT_OF_RANGE` | `withdrawalRate` < 2% or > 8%. |
+| `LONG_HORIZON` | Horizon > 480 months. |
 
-The engine always returns warnings when applicable. The agent must surface warnings in the narrative.
+The engine always returns applicable warnings. The agent must narrate them.
 
-### 6.6 Series
+### 6.5 Series
 
-Each point is `{ month, balance, contribution, interest }` for accumulation-style goals, or `{ month, balance, payment, interestCharged }` for `DEBT_PAYOFF`, or `{ month, balance, growth }` for `INCOME_TARGET`.
+Series points vary by goal type:
 
-The series is dense (one entry per month) in the API response. In the database (`output_summary_json`), only the start, end, and the inflection points (max balance, min balance, crossing zero, crossing the target) are stored. The full series is recomputed on read for the high-fidelity response.
+- accumulation goals: `{ month, balance, contribution, interest }`
+- `DEBT_PAYOFF`: `{ month, balance, payment, interestCharged }`
+- `INCOME_TARGET`: `{ month, balance, growth }`
+
+The API response returns a dense monthly series. Persisted storage uses `output_summary_json` for the compact view and `output_series_json` only when full-series persistence is requested.
 
 ## 7. MCP Tool Catalog and Risk Classification
 
-The tool surface for the goal feature. Names are stable. Schemas follow the existing `mcp.definition` patterns.
+Tool names are stable. Schemas follow the existing `mcp.definition` pattern.
 
-### 7.1 Read Tools (always allowed, audit not required)
+### 7.1 Read Tools
 
 | Tool name | Input | Output | Description |
 | --- | --- | --- | --- |
-| `list_goals` | `{ status?, type?, limit?, cursor? }` | paginated list of goals | List the user's goals, with optional filters. |
-| `get_goal` | `{ goalId }` | goal detail with scenarios and latest run | Get a single goal. |
+| `list_goals` | `{ status?, type?, limit?, cursor? }` | paginated goals | List the user's goals. |
+| `get_goal` | `{ goalId }` | goal detail with scenarios and latest run | Fetch one goal. |
 | `get_goal_progress` | `{ goalId }` | progress snapshot | Current actual vs projection. |
-| `list_goal_scenarios` | `{ goalId }` | scenarios for a goal | |
-| `list_goal_runs` | `{ goalId, limit?, cursor? }` | paginated runs | |
-| `simulate_goal` | `{ goalId, scenarioId? }` | full `SimulationResult` (live) | Run a simulation against the engine. Read-only. |
-| `what_if` | `{ goalId, overrides }` | `SimulationResult` (no persistence) | One-off projection with overrides. |
+| `list_goal_scenarios` | `{ goalId }` | scenarios | List scenarios for a goal. |
+| `list_goal_runs` | `{ goalId, limit?, cursor? }` | paginated runs | List run history. |
+| `simulate_goal` | `{ goalId, scenarioId? }` | `SimulationResult` | Run a live simulation. |
+| `compare_scenarios` | `{ goalId, scenarioIds? }` | comparison result | Compare scenarios side by side. |
+| `what_if` | `{ goalId, overrides }` | `SimulationResult` | One-off projection without persistence. |
 
-### 7.2 Low-Risk Write Tools (allowed with audit)
+### 7.2 Low-Risk Write Tools
 
 | Tool name | Input | Output | Description |
 | --- | --- | --- | --- |
-| `create_goal` | goal inputs | `{ goalId, baselineScenarioId, runId }` | Persist a goal, a baseline scenario, and the first run. |
+| `create_goal` | goal inputs | `{ goalId, baselineScenarioId, runId }` | Persist a goal, baseline scenario, and initial run. |
 | `create_scenario` | `{ goalId, name, overrides }` | scenario | Add a scenario. |
-| `update_goal_status` | `{ goalId, status }` | goal | Lifecycle transition by user. |
+| `update_goal_status` | `{ goalId, status }` | goal | Apply a valid lifecycle transition. |
 
-### 7.3 High-Impact Write Tools (require `confirm: true`)
+### 7.3 High-Impact Write Tools
 
 | Tool name | Input | Output | Description |
 | --- | --- | --- | --- |
-| `update_goal` | `{ goalId, fields, confirm }` | goal | Update title, target, date, linked account, inputs. |
-| `apply_scenario_as_baseline` | `{ goalId, scenarioId, confirm }` | goal | Promote a scenario. |
-| `delete_goal` | `{ goalId, confirm }` | `{ deleted: true }` | Soft delete. |
+| `update_goal` | `{ goalId, fields, confirm }` | goal | Update title, target, date, linked account, or inputs. |
+| `apply_scenario_as_baseline` | `{ goalId, scenarioId, confirm }` | goal | Promote a scenario to baseline. |
+| `delete_goal` | `{ goalId, confirm }` | `{ deleted: true }` | Soft delete a goal. |
 
 ### 7.4 Risk Class Table
-
-The risk class lives on `ToolDefinition` as metadata. The risk policy class enforces it.
 
 | Tool | Risk class | Confirmation | Audit | Rate limit |
 | --- | --- | --- | --- | --- |
@@ -444,6 +449,7 @@ The risk class lives on `ToolDefinition` as metadata. The risk policy class enfo
 | `list_goal_scenarios` | read | no | no | 60/min/user |
 | `list_goal_runs` | read | no | no | 60/min/user |
 | `simulate_goal` | read | no | no | 30/min/user |
+| `compare_scenarios` | read | no | no | 60/min/user |
 | `what_if` | read | no | no | 60/min/user |
 | `create_goal` | low | no | yes | 20/min/user |
 | `create_scenario` | low | no | yes | 60/min/user |
@@ -452,471 +458,572 @@ The risk class lives on `ToolDefinition` as metadata. The risk policy class enfo
 | `apply_scenario_as_baseline` | high | `confirm: true` | yes | 10/min/user |
 | `delete_goal` | high | `confirm: true` | yes | 5/min/user |
 
-The risk class and rate limits are enforced by the policy layer in Phase 7. The tool implementations in Phase 3-5 do not check the policy themselves.
+The policy layer in later phases enforces risk class, confirmation, audit, and rate limits. Tool implementations do not duplicate that policy logic.
 
 ## 8. Agent Contract
 
-The agent's job during the simulation flow is:
+The agent flow for simulations is:
 
 1. Receive the user's free-form prompt.
 2. Choose the goal type.
-3. Extract the required and optional inputs.
-4. If a required input is missing or ambiguous, ask the user before proceeding.
-5. Call `simulate_goal` to get a `SimulationResult`.
-6. Surface the result, the assumptions, and the warnings back to the user.
-7. Ask the user to confirm persistence.
+3. Extract required and optional inputs.
+4. Ask follow-up questions if required inputs are missing or ambiguous.
+5. Call `simulate_goal`.
+6. Present the result, assumptions, and warnings.
+7. Ask the user whether to persist the goal.
 
-The agent never invents a number it does not have. If the user did not provide a `monthlyContribution` and the engine needs one, the agent asks. If the user did not provide a `currentRetirementSavings` and the engine needs one, the agent asks.
+Rules:
 
-The agent's prompt template must include:
+- The agent never invents numbers it does not have.
+- The agent never narrates a simulation without a real `SimulationResult`.
+- The agent includes the standard non-advisory disclaimer in every simulation response.
+- The agent does not call write tools without explicit user confirmation in a separate user turn.
 
-- A list of supported goal types with a one-line summary.
-- The input contract for each goal type (just the field names, not the math).
-- The risk rules: never give financial advice, always include the standard disclaimer when narrating a simulation, never narrate a simulation without a `SimulationResult` from the tool.
-- The order of operations: extract, simulate, present, confirm, persist.
+The prompt template must include:
 
-The agent does not call write tools without explicit user confirmation. The confirmation is a separate user turn, not inferred from the simulation response.
+- supported goal types with one-line summaries
+- input contracts per goal type
+- the disclaimer and no-advice rule
+- the order of operations: extract, simulate, present, confirm, persist
 
 ## 9. Open Questions and Resolutions
 
-Each open question from the roadmap is resolved here so that Phase 1 can start. If any of these resolutions is wrong, it must be challenged before entity code is written.
+These Phase 0 questions are resolved here so Phase 1 can start cleanly.
 
 | # | Question | Resolution |
 | --- | --- | --- |
 | 1 | Should `Scenario` allow overriding the goal type, or only parameters? | Parameters only. Scenarios share the goal type. |
-| 2 | What is the default expected return rate for `SAVINGS` and `RETIREMENT`? | `SAVINGS` defaults to 0% (cash savings, no return). `RETIREMENT` defaults to 7% real return. The user can override in both cases. |
-| 3 | Should the agent support voice or multi-message goal refinement, or only single-prompt v1? | Multi-message is fine when the user provides it. The agent asks for missing inputs over multiple turns. Voice is out of scope. |
-| 4 | Should the scheduler opt users in by default or require explicit activation? | Opt-in per goal. The default for new goals is to enable progress tracking. The user can disable it from the goal detail view. |
-| 5 | Is there a product requirement to limit goal types per user tier? | Not in v1. All five goal types are available to all users. |
-| 6 | How should we handle a user with zero accounts or zero transactions when they prompt a goal? | Allow the simulation, but add a `MISSING_INCOME_HISTORY` or `MISSING_LINKED_ACCOUNT` warning as appropriate. The engine uses sensible defaults (zero income, zero expense) and clearly labels the result as low-confidence. |
+| 2 | What is the default expected return rate for `SAVINGS` and `RETIREMENT`? | `SAVINGS` defaults to 0%. `RETIREMENT` defaults to 7% nominal annual return, with inflation modeled separately. |
+| 3 | Should the agent support voice or multi-message goal refinement, or only single-prompt v1? | Multi-message refinement is supported. Voice is out of scope. |
+| 4 | Should the scheduler opt users in by default or require explicit activation? | New goals are progress-tracked by default, with user opt-out later in the product flow. |
+| 5 | Is there a product requirement to limit goal types per user tier? | No. All five goal types are available to all users in v1. |
+| 6 | How should we handle users with zero accounts or zero transactions? | Allow the simulation, use zero-based defaults where needed, and emit low-confidence warnings such as `MISSING_INCOME_HISTORY` or `MISSING_LINKED_ACCOUNT`. |
 
-The only remaining open question is whether the `linked_account_id` field is a hard requirement for any goal type. Resolution: it is always optional in v1. Linking an account is a future feature for tracking real contributions.
+`linked_account_id` is optional for every v1 goal type.
 
 ## 10. Sign-Off
 
-This design is signed off when all four milestone checks from the roadmap are confirmed:
+Phase 0 design lock-in is complete. The design baseline for goal simulation is now established by this document.
 
-- [ ] Goal type catalog reviewed and signed off.
-- [ ] Scenario and output schemas written into this design addendum.
-- [ ] Risk classification table agreed on.
-- [ ] Open questions list (Section 9) all answered or deferred.
+- [x] Goal type catalog reviewed and signed off.
+- [x] Scenario and output schemas approved.
+- [x] MCP risk classification table approved.
+- [x] Open questions resolved or explicitly deferred.
 
-Phase 1 starts only after this document is approved.
+Phase 1 can start from this document as the source of truth.
 
 ## 11. Phase 1 Implementation Notes
 
-Phase 1 stands up the `com.saveapenny.goal` domain module: entities, repositories, REST CRUD, and the supporting DTOs, mapper, service, controller, and exception handling. The following notes record what was actually built and any deviations from this design document.
+Phase 1 is now implemented. This section records what was actually built and where the implementation differs from the Phase 0 target design.
 
 ### 11.1 Files Delivered
 
-```
+```text
 src/main/java/com/saveapenny/goal/
-  entity/       GoalEntity, ScenarioEntity, GoalRunEntity,
-                GoalType, GoalStatus, GoalRunTrigger, Feasibility
-  repository/   GoalRepository, ScenarioRepository, GoalRunRepository
+  controller/   GoalController
   dto/          CreateGoalRequest, UpdateGoalRequest, GoalResponse,
                 CreateScenarioRequest, ScenarioResponse, GoalRunResponse,
                 GoalDetailResponse, UpdateGoalStatusRequest
-  mapper/       GoalMapper (MapStruct)
-  service/      GoalService + impl
-  controller/   GoalController
+  entity/       GoalEntity, ScenarioEntity, GoalRunEntity,
+                GoalType, GoalStatus, GoalRunTrigger, Feasibility
   exception/    GoalNotFoundException, ScenarioNotFoundException,
                 InvalidGoalDateException, InvalidGoalStatusTransitionException,
                 InvalidGoalTypeException, LinkedAccountNotFoundException
+  mapper/       GoalMapper
+  repository/   GoalRepository, ScenarioRepository, GoalRunRepository
+  service/      GoalService
+  service/impl/ GoalServiceImpl
 src/main/resources/db/migration/V11__create_goal_tables.sql
 src/test/java/com/saveapenny/goal/
-  service/impl/GoalServiceImplTest.java (13 cases)
-  integration/GoalFlowIntegrationTest.java (3 cases)
+  integration/  GoalFlowIntegrationTest
+  service/impl/ GoalServiceImplTest
 ```
 
-Six new handlers added to `com.saveapenny.shared.exception.GlobalExceptionHandler` covering the new exception types and returning the platform-standard `ApiResponse.failure` shape with stable error codes (`GOAL_NOT_FOUND`, `SCENARIO_NOT_FOUND`, `INVALID_GOAL_DATE`, `INVALID_GOAL_STATUS_TRANSITION`, `INVALID_GOAL_TYPE`, `LINKED_ACCOUNT_NOT_FOUND`).
+`com.saveapenny.shared.exception.GlobalExceptionHandler` was extended with handlers for the six goal-specific exceptions and stable error codes:
 
-### 11.2 Deviations From the Original Design
+- `GOAL_NOT_FOUND`
+- `SCENARIO_NOT_FOUND`
+- `INVALID_GOAL_DATE`
+- `INVALID_GOAL_STATUS_TRANSITION`
+- `INVALID_GOAL_TYPE`
+- `LINKED_ACCOUNT_NOT_FOUND`
 
-These are the places where the implementation differs from the design doc, with reasoning. They should be reviewed before Phase 2 starts.
+### 11.2 Implemented REST Surface
 
-1. **JSON column storage is `TEXT`, not `JSONB`.**
-   - The design specifies `JSONB` for `inputs_json`, `goal_scenarios.inputs_json`, and `goal_runs.output_*_json`. The migration uses `TEXT`.
-   - Reason: the project's integration tests run on H2 in PostgreSQL mode. H2's PostgreSQL mode does not have first-class `JSONB` support that is portable across versions. Using `TEXT` keeps tests portable and the application-layer contract is identical (Jackson parses and emits the JSON, the database stores bytes).
-   - Impact: none at the API or application layer. If raw `psql` queries are ever written against the `inputs_json` columns, JSON operators will not work. The application's repository layer is the only intended read path.
+The shipped Phase 1 REST surface is:
 
-2. **`PATCH` semantics are explicit, not mapper-driven.**
-   - The design does not specify how `PATCH /api/v1/goals/{id}` should treat null fields. The service implements a real partial update: a null field in `UpdateGoalRequest` is never applied to the entity. This avoids the MapStruct default of "set null" which would violate the `NOT NULL` constraint on `inputs_json`.
-   - The mapper exposes a `jsonInputsToString(JsonNode)` helper that the service uses only when the request actually supplies a new `inputs` payload.
+- `POST /api/v1/goals`
+- `GET /api/v1/goals`
+- `GET /api/v1/goals/{id}`
+- `PATCH /api/v1/goals/{id}`
+- `DELETE /api/v1/goals/{id}`
+- `PATCH /api/v1/goals/{id}/status`
+- `POST /api/v1/goals/{id}/scenarios`
+- `GET /api/v1/goals/{id}/scenarios`
+- `GET /api/v1/goals/{id}/runs`
 
-3. **Soft delete, not hard delete.**
-   - The roadmap said "soft delete" and the implementation honors that. `GoalEntity` has a `deleted_at` column. `DELETE /api/v1/goals/{id}` sets `deletedAt` to now and forces `status = ABANDONED`. All read queries filter out goals where `deleted_at IS NOT NULL` and the service throws `GoalNotFoundException` for any access to a soft-deleted goal, so cross-user access attempts get the same `404` as never-existed goals.
-   - Scenarios and runs are deleted by the database's `ON DELETE CASCADE` from `goals` if a hard delete is ever needed, but soft delete preserves the `goal_runs` history.
+Compared with the original Phase 1 target, the implementation adds one explicit lifecycle endpoint, `PATCH /api/v1/goals/{id}/status`, so status transitions do not have to be overloaded onto the general `PATCH` endpoint.
 
-4. **Baseline scenario invariant is enforced in the database.**
-   - A partial unique index `uq_goal_scenarios_one_baseline_per_goal ON goal_scenarios(goal_id) WHERE is_baseline = TRUE` guarantees at most one baseline per goal. The service's create flow also demotes the existing baseline when a new one is requested, so the application is consistent on its own, but the database constraint is the final safety net.
+### 11.3 Behavior Implemented
 
-5. **Status transitions are enforced in the service, not the database.**
-   - The lifecycle is `DRAFT -> ACTIVE -> {ACHIEVED, ABANDONED} -> terminal`. The migration's `CHECK` constraint on `status` only validates the value, not the transition. The service holds the only authoritative transition table. If a goal ever needs to be set to `ACHIEVED` programmatically (the Phase 6 progress job), it must go through the service.
+- Goal creation validates that `targetDate` is in the future.
+- Goal creation validates that `inputs.type` matches the requested `GoalType` and that the input envelope contains `version`, `type`, and `values`.
+- If `linkedAccountId` is provided, ownership is enforced through `AccountRepository.existsByIdAndUserIdAndActiveTrue(...)`.
+- Goal creation persists a baseline scenario automatically with the name `Baseline` and `isBaseline = true`.
+- Goal update uses partial `PATCH` semantics: only supplied fields are changed.
+- Goal delete is soft delete: `deleted_at` is set and `status` is forced to `ABANDONED`.
+- All read paths exclude soft-deleted goals.
+- `GET /api/v1/goals/{id}/runs` is functional, but returns an empty page until later phases start persisting `GoalRunEntity` rows.
 
-6. **`isBaseline` JSON serialization.**
-   - Lombok generates `isBaseline()` for `private boolean isBaseline`. Jackson then exposes the property as `baseline` in JSON by default. The entity and the response DTO both carry `@JsonProperty("isBaseline")` so the wire format matches the design doc. A custom `toResponse(ScenarioEntity)` in the mapper sets the field directly to avoid the same property-naming confusion MapStruct has with boolean fields.
+### 11.4 Deviations From The Phase 0 Target Design
 
-7. **No code outside `com.saveapenny.goal` references the new entities directly.**
-   - Verified by grep across `src/main/java`. The only cross-package reference is the six new exception handlers in `com.saveapenny.shared.exception.GlobalExceptionHandler`, which is the project's standard cross-module exception wiring.
+1. **JSON persistence is `TEXT`, not `JSONB`.**
+   - The Phase 0 design uses `JSONB` as the target contract.
+   - `V11__create_goal_tables.sql` stores `inputs_json`, `inputs_snapshot_json`, `output_summary_json`, and `output_series_json` as `TEXT`.
+   - Reason: the current project test pattern uses H2 in PostgreSQL mode for integration tests. `TEXT` keeps those tests portable while preserving the application-level JSON contract.
 
-8. **Run history endpoints are stubbed.**
-   - `GET /api/v1/goals/{id}/runs` returns an empty page in Phase 1. The engine that produces runs is Phase 2. The entity and repository are in place so the endpoint contract is stable.
+2. **`deleted_at` was added to support soft delete.**
+   - The roadmap called for soft delete, but the Phase 0 entity table did not yet include the column.
+   - The implementation adds `deleted_at` to `goals` and treats a soft-deleted goal as not found on all reads.
 
-### 11.3 Milestone Status
+3. **Lifecycle transitions ship as a dedicated endpoint.**
+   - The design already defined lifecycle rules and a low-risk `update_goal_status` tool.
+   - Phase 1 exposes the same separation in REST with `PATCH /api/v1/goals/{id}/status`.
 
-From the Phase 1 section of `GOAL_SIMULATION_ROADMAP.md`:
+4. **No initial `GoalRunEntity` row is created in Phase 1.**
+   - The persistence schema for runs exists.
+   - The simulation engine does not exist yet, so no initial run is created during goal creation.
+   - The first persisted run is deferred to Phase 4 when simulation is wired end to end.
 
-- [x] Migration runs cleanly on a fresh DB and on a DB upgraded from the previous schema. (V11 is valid PostgreSQL; H2 integration tests pass under `create-drop`.)
-- [x] All eight endpoints return correct shapes and reject cross-user access with `404`.
-- [x] `GoalService` is covered by unit tests for create, update, list, ownership check, and not-found.
-- [x] Integration test `GoalFlowIntegrationTest` passes against H2 in PostgreSQL mode (the project's standard test database).
-- [x] OpenAPI schema in `/v3/api-docs` includes the new endpoints (Swagger annotations in place; picked up by springdoc auto-config).
-- [x] No code outside the new module references the new entities directly.
-
-### 11.4 What's Next (Phase 2 Inputs)
-
-Phase 2 builds the simulation engine on top of the persisted entities. The engine must read goal inputs from the `inputs_json` column (still stored as `TEXT`, application parses with Jackson), feed them into a strategy, and produce a `SimulationResult`. The strategy contract defined in the design doc (Section 6) is unchanged.
-
-## 12. Phase 5 Design: Scenarios, Comparison, What-If
-
-Phase 5 layers the "explore alternatives" surface on top of the engine and the simulation tool. The user can save a second scenario under the same goal, compare two or more scenarios side by side, and ask one-off "what-if" questions without leaving a trace.
-
-The contracts below extend Section 7 of this document. The risk classification stays: comparison and what-if are read-only, create-scenario is a low-risk write with audit. Risk-policy enforcement still lives in Phase 7.
-
-### 12.1 Scenarios
+5. **Baseline scenario creation happens automatically in the service.**
+   - The design defined the baseline invariant.
+   - The implementation enforces it immediately by creating a baseline scenario when the goal is created, and by demoting any existing baseline if a new scenario is created with `isBaseline = true`.
 
-A `Scenario` is a named set of input overrides for a goal. Section 2 already says "a scenario `inputs_json` has the same shape, plus an optional `name`." Phase 5 keeps the existing `POST /api/v1/goals/{goalId}/scenarios` endpoint and the `create_scenario` MCP tool that mirrors it. No new entity fields.
-
-The existing baseline invariant (one baseline per goal) is preserved. The new `create_scenario` tool follows the same rule: a scenario with `isBaseline=true` demotes the previous baseline; a scenario with `isBaseline=false` (or omitted) inherits baseline status only if the goal has no baseline yet.
-
-### 12.2 Compare Scenarios
-
-The comparison endpoint takes a goal id and a list of scenario ids, runs the engine against each scenario's inputs, and returns a side-by-side view plus deltas against the baseline.
-
-**Request**
-
-```json
-{
-  "scenarioIds": ["uuid-baseline", "uuid-aggressive"]
-}
-```
+### 11.5 Phase 1 Milestone Status
 
-If the list is empty or missing, the service returns the baseline plus all non-baseline scenarios for the goal. The list is capped at ten scenarios to keep the response bounded.
+- [ ] Migration execution against a real Flyway-managed database still needs explicit verification.
+- [x] Goal CRUD, scenario listing/creation, and run-history endpoints are implemented and ownership-scoped.
+- [x] `GoalServiceImplTest` covers create, list, update, status transition, soft delete, and not-found paths.
+- [x] `GoalFlowIntegrationTest` passes against H2 in PostgreSQL mode.
+- [ ] OpenAPI annotations are in place on `GoalController`, but `/v3/api-docs` coverage has not yet been explicitly verified.
+- [x] No code outside the new module references goal entities directly, other than the shared exception handler wiring.
 
-**Response**
+### 11.6 What's Next
 
-```json
-{
-  "goalId": "uuid",
-  "scenarios": [
-    {
-      "scenarioId": "uuid",
-      "scenarioName": "Baseline",
-      "isBaseline": true,
-      "feasibility": "ON_TRACK",
-      "horizonMonths": 24,
-      "currency": "USD",
-      "requiredMonthlyContribution": 200.00,
-      "projectedAmount": 5000.00,
-      "shortfall": 0.00,
-      "warningsCount": 0
-    }
-  ],
-  "deltas": [
-    {
-      "fromScenarioId": "uuid-baseline",
-      "toScenarioId": "uuid-aggressive",
-      "feasibilityChanged": false,
-      "requiredMonthlyContributionDelta": -100.00,
-      "projectedAmountDelta": 1500.00,
-      "shortfallDelta": -1500.00
-    }
-  ],
-  "disclaimer": "..."
-}
-```
-
-The comparison is a read. Nothing is persisted. No `GoalRunEntity` is created. The cap (10 scenarios) and the order (baseline first, then by `createdAt`) keep the response deterministic.
-
-### 12.3 What-If
-
-The what-if endpoint takes a goal id and a flat set of input overrides, runs the engine once with the merged inputs, and returns a single `SimulationResult` tagged as a projection. Nothing is persisted. No scenario is created, no run is recorded, the goal's `inputs_json` is not modified.
-
-**Request**
-
-```json
-{
-  "overrides": {
-    "monthlyContribution": 500.00,
-    "expectedAnnualReturn": 1.5
-  }
-}
-```
-
-**Response**
-
-```json
-{
-  "goalId": "uuid",
-  "result": {
-    "type": "SAVINGS",
-    "feasibility": "ON_TRACK",
-    "horizonMonths": 24,
-    "currency": "USD",
-    "summary": { ... },
-    "assumptions": { ... },
-    "warnings": [ ... ]
-  },
-  "deltaVsBaseline": {
-    "requiredMonthlyContributionDelta": -300.00,
-    "projectedAmountDelta": 3600.00,
-    "shortfallDelta": -1000.00
-  },
-  "isProjection": true,
-  "disclaimer": "..."
-}
-```
-
-The `deltaVsBaseline` block is computed against the goal's current baseline scenario. If the goal has no baseline, the block is null. The `isProjection` flag is the client signal: this response is a one-off, not a stored run.
-
-The override shape is the same flat key/value document as `ScenarioEntity.inputsJson` (without the `version` and `type` envelope). The engine merges overrides on top of the goal's own `inputs_json`, so a partial override is allowed and the unspecified fields fall through to the goal defaults.
-
-### 12.4 Tooling and REST Surface
-
-| Surface | Name | Risk | Notes |
-| --- | --- | --- | --- |
-| REST | `POST /api/v1/goals/{id}/scenarios/compare` | read | accepts `{ scenarioIds: [...] }`, returns comparison |
-| REST | `POST /api/v1/goals/{id}/what-if` | read | accepts `{ overrides: {...} }`, returns projection |
-| MCP | `create_scenario` | low-risk write | wraps `GoalService.createScenario` |
-| MCP | `compare_scenarios` | read | wraps the new compare endpoint |
-| MCP | `what_if` | read | wraps the new what-if endpoint |
-
-The MCP tools follow the same `ToolHandler<I, O>` contract as the rest of the goal tools. Inputs are validated with `ToolValidationException`. Ownership is enforced by the service through the same `findOwnedActiveGoal` helper used by the rest of the goal surface, so cross-user access returns `NOT_FOUND` and never leaks existence.
-
-### 12.5 Agent Prompt Update
-
-The agent prompt for Phase 4 already covers "create a goal" and "what's the status of my goal". Phase 5 adds:
+Phase 2 builds the deterministic simulation engine on top of the new persistence layer. The Phase 1 module now provides the storage, ownership checks, and REST surface that the simulation layer will plug into.
 
-- "Save this as a scenario under my house goal." -> `create_scenario`
-- "Compare my baseline and aggressive scenarios." -> `compare_scenarios`
-- "What if I save $500 a month instead of $200?" -> `what_if`
-
-The prompt is updated to make clear that `what_if` is the right tool when the user is exploring a single alternative and `create_scenario` + `compare_scenarios` is the right pattern when the user wants to keep the alternative. The prompt also reminds the agent to narrate the `deltaVsBaseline` field when present and to always include the disclaimer.
-
-### 12.6 Milestone Status
-
-- [ ] `create_scenario` MCP tool is auto-registered and follows the low-risk write contract.
-- [ ] `compare_scenarios` MCP tool returns side-by-side results plus baseline deltas.
-- [ ] `what_if` MCP tool returns a single projection with `isProjection: true` and never writes to the database.
-- [ ] REST endpoints `POST /api/v1/goals/{id}/scenarios/compare` and `POST /api/v1/goals/{id}/what-if` are reachable, ownership-scoped, and return the documented shape.
-- [ ] Cross-user access returns `404`, never leaks goal or scenario existence.
-- [ ] Comparison respects the ten-scenario cap and the deterministic ordering rule.
-- [ ] What-if does not create a `ScenarioEntity` or a `GoalRunEntity`. Verified by an integration test that asserts the row counts before and after the call.
-- [ ] Agent prompt template includes the three new intents with the right tool names.
-
----
-
-## 13. Phase 6 — Progress Tracking & Off-Track Alerts
-
-### 13.1 Goals
+## 12. Phase 2 Implementation Notes
 
-Phase 6 closes the loop on the goal-simulation stack. After Phase 5 the user can model alternatives; Phase 6 makes those models stay current by:
-
-1. Replacing the placeholder thresholds in `GetGoalProgressToolHandler` with a deterministic, testable `GoalProgressCalculator`.
-2. Adding a scheduled job that runs every active goal through that calculator and emits a single `GOAL_OFF_TRACK` notification when a goal transitions from on-track to off-track.
-3. Surfacing the off-track state in the assistant prompt so a user can ask "am I on track for X?" and get a structured answer.
+Phase 2 is now implemented as a pure simulation package under `com.saveapenny.goal.simulation`. The implementation focuses on deterministic strategy execution and isolated unit coverage, without any database or Spring wiring inside the math layer.
 
-Phase 6 does not introduce new endpoints and does not change the simulation engine. It only reads existing projections and decides whether the user needs to be told.
-
-### 13.2 New `GoalProgressReport` DTO
-
-```java
-public record GoalProgressReport(
-    UUID goalId,
-    UUID baselineScenarioId,
-    UUID baselineRunId,
-    BigDecimal currentAmount,
-    BigDecimal projectedAmountAtTarget,
-    BigDecimal gap,
-    Integer monthsRemaining,
-    ProgressStatus status,
-    int offTrackForMonthsCount,
-    List<Warning> warnings
-) {
-    public enum ProgressStatus { ON_TRACK, AT_RISK, OFF_TRACK, ACHIEVED, NO_PROJECTION }
-    public record Warning(String code, String message) {}
-}
-```
-
-The record is the single source of truth for "where does this goal stand right now?". Both the MCP `getGoalProgress` tool and the scheduled job consume it.
-
-### 13.3 `GoalProgressCalculator` (pure, deterministic)
-
-`com.saveapenny.goal.service.GoalProgressCalculator` is a Spring `@Component` with a single public method:
-
-```java
-GoalProgressReport calculate(UUID userId, UUID goalId, LocalDate asOf);
-```
-
-It must:
-
-- Load the goal through the existing ownership-scoped path (`goalService.getById` -> throws `GoalNotFoundException` if not found or soft-deleted).
-- Read the latest `GoalRunEntity` for the goal's baseline scenario. If there is no scenario or no run, return `status = NO_PROJECTION` and a single warning `NO_PROJECTION` with the message "No baseline scenario with a run exists for this goal.".
-- Read the goal's "current amount" using the same JSON node lookups the placeholder already uses (`startBalance`, `currentDownPayment`, `currentBalance`, `currentRetirementSavings`, `currentAverageMonthlyNetIncome`), in that order. If none is present, fall back to `BigDecimal.ZERO` and add a warning `CURRENT_BALANCE_MISSING`.
-- Compute `monthsRemaining = monthsBetween(asOf, goal.targetDate)`. If `targetDate` is in the past, return `status = ACHIEVED` when `currentAmount >= targetAmount`, otherwise `OFF_TRACK` with a warning `TARGET_DATE_PASSED`.
-- Run the classification below.
-
-The calculator never touches the database for state writes and never reads the `notification` table. It is a pure read of the goal + run + JSON tree, plus arithmetic.
-
-### 13.4 Classification Rules
-
-All thresholds are derived from a single configuration record so the values can be overridden per environment:
-
-```java
-@ConfigurationProperties(prefix = "goal.progress")
-public record GoalProgressProperties(
-    BigDecimal offTrackRatio,        // default 0.10
-    BigDecimal atRiskRatio,          // default 0.05
-    int offTrackPersistenceMonths    // default 2
-) { }
-```
-
-The classification function is:
-
-1. If `currentAmount >= targetAmount` and `targetAmount.signum() > 0` -> `ACHIEVED`.
-2. If the latest run is missing -> `NO_PROJECTION` (already handled).
-3. Compute `deficit = projectedAmountAtTarget - currentAmount`. If `deficit <= 0` -> `ON_TRACK`.
-4. Compute `ratio = deficit / |projectedAmountAtTarget|` (MathContext.DECIMAL64). If `ratio >= offTrackRatio` -> `OFF_TRACK`. Else if `ratio >= atRiskRatio` -> `AT_RISK`. Else `ON_TRACK`.
-5. `offTrackForMonthsCount` is a field on the report. For the calculator's first call, it always reports `0` for `ON_TRACK`/`AT_RISK` and `1` for `OFF_TRACK` (the persistence counter is bumped by the scheduler, see 13.6).
-
-`ProjectedAmountAtTarget` is the same field the placeholder uses today. The rules match the existing `GetGoalProgressToolHandler` behaviour so Phase 6 is a refactor, not a behaviour change.
-
-### 13.5 `GOAL_OFF_TRACK` Notification Type
-
-A new value is added to `com.saveapenny.notification.entity.NotificationType`:
-
-```java
-public enum NotificationType {
-    BUDGET_WARNING,
-    BUDGET_EXCEEDED,
-    RECURRING_TRANSACTION_CREATED,
-    GOAL_OFF_TRACK,
-    SYSTEM
-}
-```
-
-`GOAL_OFF_TRACK` uses the existing `Notification` schema unchanged. Title and message are constructed by the scheduler (see 13.6); no schema changes are needed.
-
-### 13.6 `GoalOffTrackNotifier` (idempotency gate)
-
-`com.saveapenny.goal.notification.GoalOffTrackNotifier` is a Spring `@Component` with a single public method:
-
-```java
-Optional<NotificationResponse> notifyIfTransitionedToOffTrack(
-    UUID userId, UUID goalId, GoalProgressReport report);
-```
-
-It is invoked by the scheduler right after the calculator, and it enforces idempotency. The rule is "notify once per off-track episode":
-
-1. Query the notification repository for any `GOAL_OFF_TRACK` notification with `read = false` and a title that starts with `"Goal is off track: "` plus the goal's title. If one exists, treat the call as a no-op (return `Optional.empty()`).
-2. If the report's status is `OFF_TRACK` and the above query returned nothing, build a `CreateNotificationRequest` with `type = GOAL_OFF_TRACK`, `title = "Goal is off track: <goal.title>"`, `message = "<narrative>"` and call `NotificationService.create(userId, request)`. Return the new response.
-3. If the report's status is `ON_TRACK` or `AT_RISK`, do nothing. The notifier does not "clear" notifications; the user marks them read themselves.
-4. If the report's status is `ACHIEVED` or `NO_PROJECTION`, do nothing.
-
-The message body is deterministic and includes:
-
-- Goal title
-- Target amount (currency-formatted, no decimals for whole numbers, else 2)
-- Projected amount at target date
-- Current amount
-- The phrase "You are <ratio>% behind the projection after <months> months."
-- A static footer: `"This is informational, not a recommendation."`
-
-The narrative is built from the same `MoneyFormatter` utilities used elsewhere in the goal module. If those utilities are not available, the notifier falls back to `toPlainString()` on the `BigDecimal`. Tests assert the message contains the four required substrings.
-
-`markExistingAsRead` is intentionally not called; if the user wants to dismiss the alert they go through the existing `update` path.
-
-### 13.7 `GoalProgressJob` (scheduled)
-
-`com.saveapenny.goal.scheduler.GoalProgressJob` is a Spring `@Component` in a new `goal.scheduler` subpackage. It uses the existing `@EnableScheduling` in `com.saveapenny.config.AsyncConfig` — no new config class is required.
-
-```java
-@Scheduled(cron = "${goal.progress.cron:0 0 6 * * *}")
-public void evaluateAllActiveGoals() { ... }
-```
-
-The cron is a property so prod can shift it; the default is `0 0 6 * * *` (06:00 server time, every day). The job:
-
-1. Reads the system clock through the existing `assistantClock` bean.
-2. Pages through `goalRepository.findAllByStatus(GoalStatus.ACTIVE, Pageable)` (a new repository method, see 13.9).
-3. For each `ACTIVE` goal with `deletedAt == null`:
-   - Run `goalProgressCalculator.calculate(goal.userId, goal.id, asOf)`.
-   - Call `goalOffTrackNotifier.notifyIfTransitionedToOffTrack(...)`.
-4. The job is intentionally non-transactional at the top level. Each call into the calculator/notifier opens its own short transaction through Spring's default propagation.
-5. Failures are logged at `WARN` with the goal id and stack trace, and the loop continues. One bad goal must not stop the rest.
-
-The job is safe to run manually in tests by calling `evaluateAllActiveGoals()` directly. There is no leader-election layer; if a multi-instance deploy is added later the `RecurringTransactionScheduler` already exists and shows the pattern (it does not lock either, and that is acceptable for v1).
-
-### 13.8 `GetGoalProgressToolHandler` Refactor
-
-`GetGoalProgressToolHandler` is rewritten to delegate to `GoalProgressCalculator`. The placeholder constants `OFF_TRACK_THRESHOLD` and `AT_RISK_THRESHOLD` are removed. The new flow:
-
-1. Validate input (unchanged).
-2. Call `goalProgressCalculator.calculate(context.requireUserId(), input.goalId(), LocalDate.now(clock))`. The calculator throws `GoalNotFoundException` on missing/soft-deleted goals, which the handler translates to `ToolExecutionException(NOT_FOUND)` exactly like today.
-3. Map the calculator's `GoalProgressReport` into the existing `GetGoalProgressToolResult` shape.
-4. Two new fields are added to the result record: `Integer offTrackForMonthsCount` and `UUID baselineRunId` (or `null` if `NO_PROJECTION`).
-5. The `ToolDefinition` is updated to document the new fields. The agent prompt tells the model that a non-zero `offTrackForMonthsCount` means the user has been notified and they should be told to check their inbox.
-
-This is a breaking change for any LLM that previously read `status` only. The new fields are nullable so old callers that ignored them keep working.
-
-### 13.9 Repository & Configuration Additions
-
-```java
-// GoalRepository
-Page<GoalEntity> findAllByStatus(GoalStatus status, Pageable pageable);
-```
-
-```yaml
-# application.yml additions
-goal:
-  progress:
-    off-track-ratio: 0.10
-    at-risk-ratio: 0.05
-    off-track-persistence-months: 2
-    cron: "0 0 6 * * *"
-```
-
-`GoalProgressProperties` is registered through `@EnableConfigurationProperties(GoalProgressProperties.class)` in a new `com.saveapenny.goal.config.GoalConfig` class. The class is a one-method `@Configuration` that exists only to wire the property bean — no other logic lives there.
-
-A new query method is needed on `NotificationRepository` for the idempotency check:
-
-```java
-List<Notification> findAllByUserIdAndTypeAndReadFalse(UUID userId, NotificationType type);
-```
-
-### 13.10 Assistant Prompt Update
-
-The system prompt in `application.yml` (line 80) is extended with one paragraph:
+### 12.1 Files Delivered
 
 ```text
-When the user asks whether a goal is on track, whether they are falling
-behind, or how a goal is doing, call getGoalProgress for the relevant
-goal and narrate the status field. OFF_TRACK means a notification has
-already been sent; remind the user. AT_RISK means they are close to
-falling behind. NO_PROJECTION means the user has not run a simulation
-yet and should be offered to run one. Always include the existing
-disclaimer.
+src/main/java/com/saveapenny/goal/simulation/
+  SimulationEngine
+  SimulationInput
+  SimulationResult
+  MonthlyProjectionPoint
+  AssumptionSet
+  SimulationWarning
+  IncomeStrategy
+  math/         SimulationMath
+  strategy/     GoalSimulationStrategy,
+                AbstractGoalSimulationStrategy,
+                SavingsGoalStrategy,
+                DebtPayoffGoalStrategy,
+                PurchasePlanningGoalStrategy,
+                RetirementGoalStrategy,
+                IncomeTargetGoalStrategy
+src/test/java/com/saveapenny/goal/simulation/
+  SimulationEngineTest
+  strategy/     SavingsGoalStrategyTest,
+                DebtPayoffGoalStrategyTest,
+                PurchasePlanningGoalStrategyTest,
+                RetirementGoalStrategyTest,
+                IncomeTargetGoalStrategyTest
 ```
 
-The intent catalog added in Phases 4 and 5 already covers "what is the status of my goal" via `getGoalProgress`. Phase 6 sharpens the wording so the LLM picks the right tool even when the user phrases it as "am I behind?", "are we on pace?", or "should I be worried about my goal?".
+### 12.2 Behavior Implemented
 
-### 13.11 Milestone Status
+- `SimulationEngine` dispatches by `GoalType` and has a `defaultEngine()` factory with all five v1 strategies registered.
+- Each strategy accepts a normalized `SimulationInput` and returns a `SimulationResult` with:
+  - feasibility
+  - summary map
+  - assumptions map
+  - warnings
+  - dense monthly projection series
+- Shared math is centralized in `SimulationMath` for:
+  - horizon calculation
+  - monthly-rate conversion
+  - future value
+  - required contribution
+  - money rounding
+- Common warnings are applied consistently across strategies:
+  - `MULTI_CURRENCY`
+  - `MISSING_INCOME_HISTORY`
+  - `MISSING_LINKED_ACCOUNT`
+  - `HIGH_APR`
+  - `NEGATIVE_CASH_FLOW`
+  - `INFLATION_NOT_SPECIFIED`
+  - `WITHDRAWAL_RATE_OUT_OF_RANGE`
+  - `LONG_HORIZON`
 
-- [ ] `GoalProgressCalculator` is deterministic and unit-tested with a table of fixtures covering ACHIEVED, ON_TRACK, AT_RISK, OFF_TRACK, NO_PROJECTION, missing current balance, and target-date-passed.
-- [ ] `GoalOffTrackNotifier` unit tests cover the four idempotency cases (existing unread, transition into off-track, stay on-track, recovered to achieved).
-- [ ] `GoalProgressJob` integration test seeds two goals, drives the job, and asserts exactly one `GOAL_OFF_TRACK` notification was created on the first run and zero on the second.
-- [ ] `GetGoalProgressToolHandler` is rewired to the calculator; the placeholder constants are removed; the new fields are present in the result.
-- [ ] `GoalProgressProperties` is bound from `application.yml` and overridable per environment.
-- [ ] Assistant prompt template includes the on-track status intent.
-- [ ] Full `mvn test` is green (existing 378 passing tests plus the new Phase 6 tests, the unrelated OCR pre-existing failure aside).
+### 12.3 Deviations From The Phase 0 / Phase 2 Target Design
+
+1. **`Feasibility` remains in `com.saveapenny.goal.entity`.**
+   - The roadmap originally listed `Feasibility` under the new simulation package.
+   - The implementation reuses the Phase 1 enum so persisted runs and simulation output share the same feasibility type.
+
+2. **Summary and assumptions are modeled as maps.**
+   - `SimulationResult.summary` is a `Map<String, Object>`.
+   - `AssumptionSet` wraps a `Map<String, Object>`.
+   - This keeps the engine flexible while the per-type output contract is still evolving in later phases.
+
+3. **Phase 2 is still engine-only.**
+   - No goal service wiring, REST simulation endpoint, or MCP simulation tool is introduced here.
+   - Those remain Phase 4 work.
+
+### 12.4 Phase 2 Milestone Status
+
+- [x] Unit tests cover at least 3 cases per strategy: easy feasibility, tight feasibility, infeasible.
+- [ ] Edge case tests for zero APR, zero contribution, very long horizon, leap years, end-of-month boundaries, and currency mismatch warnings are only partially covered and still need expansion.
+- [x] `SimulationResult` includes feasibility, required change, projected outcome, assumptions, warnings, and a month-by-month series.
+- [x] No strategy imports from repository packages.
+- [ ] Determinism is implicit in the pure design and fixed-input tests, but it has not yet been called out with an explicit duplicate-input assertion.
+
+### 12.5 What's Next
+
+Phase 3 exposes persisted goal state through MCP read tools. Phase 4 will connect the new engine to user-facing simulation flows.
+
+## 13. Phase 3 Implementation Notes
+
+Phase 3 is now implemented. The persisted goal state is exposed through read-only MCP handlers and made available to the Spring AI adapter.
+
+### 13.1 Files Delivered
+
+```text
+src/main/java/com/saveapenny/mcp/goal/
+  ListGoalsToolInput, ListGoalsToolResult, ListGoalsToolHandler
+  GetGoalToolInput, GetGoalToolResult, GetGoalToolHandler
+  GetGoalProgressToolInput, GetGoalProgressToolResult, GetGoalProgressToolHandler
+  ListGoalScenariosToolInput, ListGoalScenariosToolResult, ListGoalScenariosToolHandler
+  ListGoalRunsToolInput, ListGoalRunsToolResult, ListGoalRunsToolHandler
+  GoalToolModels
+  GoalToolMappingSupport
+src/test/java/com/saveapenny/mcp/goal/
+  GoalToolHandlersTest
+  GoalToolHandlersIntegrationTest
+```
+
+`SpringAiMcpToolAdapter` now exposes the following goal read tools to the assistant layer:
+
+- `list_goals`
+- `get_goal`
+- `get_goal_progress`
+- `list_goal_scenarios`
+- `list_goal_runs`
+
+### 13.2 Behavior Implemented
+
+- All goal read handlers are registered automatically through the existing `InMemoryToolRegistry`.
+- Ownership is enforced through the `GoalService` paths already implemented in Phase 1.
+- Goal-not-found cases are translated to MCP `NOT_FOUND` errors.
+- Missing required ids are rejected with `VALIDATION_ERROR`.
+- The Spring AI adapter formats each goal tool response into short assistant-friendly text.
+
+### 13.3 `get_goal_progress` Placeholder Behavior
+
+`GetGoalProgressToolHandler` is intentionally a placeholder in Phase 3.
+
+Current behavior:
+
+- If the goal has no persisted run, the tool returns `status = NO_PROJECTION` and a warning with code `NO_PROJECTION`.
+- `currentAmount` is inferred from the goal input envelope using the first matching field from:
+  - `startBalance`
+  - `currentDownPayment`
+  - `currentBalance`
+  - `currentRetirementSavings`
+  - `currentAverageMonthlyNetIncome`
+- If a latest run exists in later phases, the handler reads a projected amount from `outputSummary` using the first matching field from:
+  - `projectedAmount`
+  - `projectedNestEgg`
+  - `projectedMonthlyNetIncome`
+- The current placeholder classification uses simple bands:
+  - `ACHIEVED` when current amount already meets the goal target
+  - `NO_PROJECTION` when there is no run
+  - `OFF_TRACK` when shortfall ratio is at least 10%
+  - `AT_RISK` when shortfall ratio is at least 5%
+  - `ON_TRACK` otherwise
+
+This placeholder is expected to be replaced by the dedicated progress-calculation flow in Phase 6.
+
+### 13.4 Deviations From The Original Phase 3 Target
+
+1. **Tool names are snake_case.**
+   - The broader platform still has older camelCase MCP tool names.
+   - Goal tools follow the goal-simulation design contract instead: `list_goals`, `get_goal`, and so on.
+
+2. **Progress is intentionally provisional.**
+   - The roadmap called for a current-vs-projection read tool in Phase 3.
+   - The implementation ships that surface now, but with a stable placeholder classification until the richer progress job lands in Phase 6.
+
+### 13.5 Phase 3 Milestone Status
+
+- [x] All read tools are implemented and registered in `ToolRegistry`.
+- [x] Each tool has a stable name, input schema, and output schema.
+- [x] Validation rejects missing required fields with `VALIDATION_ERROR`.
+- [x] Cross-user access returns `NOT_FOUND`.
+- [x] The assistant can call at least `list_goals` and `get_goal` through `SpringAiMcpToolAdapter`.
+- [x] Unit and integration test coverage exists for the new goal read handlers.
+
+### 13.6 What's Next
+
+Phase 4 wires the simulation engine into MCP and assistant-facing simulation flows so a user can ask for a new goal simulation instead of only reading persisted goal state.
+
+## 14. Phase 4 Implementation Notes
+
+Phase 4 is now implemented as a thin simulation slice. The engine is wired into a real orchestration service, a read-only `simulate_goal` MCP tool, and new goal-simulation REST endpoints. The free-form prompt path currently supports `SAVINGS` prompts through a deterministic parser rather than a full LLM extraction loop.
+
+### 14.1 Files Delivered
+
+```text
+src/main/java/com/saveapenny/goal/
+  controller/   GoalSimulationController
+  exception/    GoalSimulationValidationException
+  service/      GoalContextProvider, GoalSimulationService
+  service/impl/ GoalContextProviderImpl, GoalPromptParser,
+                GoalSimulationServiceImpl
+  simulation/
+    GoalContextSnapshot
+    dto/        DraftGoalSimulationRequest,
+                GoalSimulationPromptRequest,
+                ParsedGoalDraft,
+                GoalSimulationResponse
+src/main/java/com/saveapenny/mcp/goal/
+  SimulateGoalToolInput
+  SimulateGoalToolHandler
+src/test/java/com/saveapenny/goal/
+  controller/   GoalSimulationControllerTest
+  integration/  GoalSimulationFlowIntegrationTest
+src/test/java/com/saveapenny/mcp/goal/
+  SimulateGoalToolHandlerTest
+```
+
+`TransactionRepository` was extended with a list query for `findAllByUserIdAndTypeAndTransactionDateBetween(...)` so the orchestration layer can compute lightweight goal context without pushing any database logic into the simulation engine.
+
+### 14.2 Implemented REST Surface
+
+The Phase 4 simulation endpoints now available are:
+
+- `POST /api/v1/goals/simulate`
+- `POST /api/v1/goals/simulate/draft`
+- `POST /api/v1/goals/{id}/simulate`
+
+### 14.3 Behavior Implemented
+
+- `GoalSimulationServiceImpl` orchestrates:
+  - loading goal context
+  - merging goal and scenario inputs when needed
+  - building a `SimulationInput`
+  - calling the pure `SimulationEngine`
+- `GoalContextProviderImpl` derives lightweight context from the user's active accounts and the last 3 months of transactions:
+  - primary account currency
+  - average monthly income
+  - average monthly expense
+  - missing-income-history flag
+- `SimulateGoalToolHandler` exposes read-only simulation for an existing goal and optional scenario id.
+- `SpringAiMcpToolAdapter` now exposes `simulate_goal` to the assistant layer.
+- `POST /api/v1/goals/{id}/simulate` runs a live simulation for an existing goal without persistence.
+- `POST /api/v1/goals/simulate` and `POST /api/v1/goals/simulate/draft` return:
+  - parsed draft goal
+  - `SimulationResult`
+  - assistant-style narrative
+  - standard disclaimer
+
+### 14.4 Deviations From The Original Phase 4 Target
+
+1. **Prompt extraction is deterministic, not LLM-driven yet.**
+   - The roadmap target said the LLM extracts goal type and parameters.
+   - The current implementation uses `GoalPromptParser` and supports `SAVINGS` prompts only.
+   - This keeps the endpoint testable and stable while the richer assistant flow is still pending.
+
+2. **Phase 4 currently supports only the minimal `SAVINGS` free-form prompt slice.**
+   - Existing-goal simulation works for all goal types that the engine supports, as long as structured inputs already exist.
+   - Free-form draft prompt parsing is intentionally narrower and throws `INVALID_GOAL_SIMULATION_REQUEST` for unsupported prompt shapes.
+
+3. **No persistence path from the simulation endpoint yet.**
+   - The roadmap described a later confirmation flow that creates a goal, baseline scenario, and run.
+   - The current endpoints are draft/read-only only.
+   - Persist-after-confirm remains future work.
+
+4. **The existing `/api/v1/assistant/chat` flow is not yet using the new goal-simulation prompt path.**
+   - The MCP tool is exposed to Spring AI.
+   - The dedicated goal simulation endpoint is separate and does not yet route through the general assistant chat service.
+
+### 14.5 Phase 4 Milestone Status
+
+- [x] End-to-end test for a simple savings prompt returns feasibility, required contribution, projection series, and a narrative.
+- [x] The draft simulation path does not write to the database.
+- [ ] The persist path that creates a `GoalEntity`, baseline `ScenarioEntity`, and `GoalRunEntity` after explicit confirmation is not implemented yet.
+- [x] Simulation responses include the standard disclaimer.
+- [x] Invalid prompt shapes return a stable validation error instead of a `500`.
+- [ ] The existing `/api/v1/assistant/chat` flow is not yet wired to run savings-goal simulations through this new prompt path.
+
+### 14.6 What's Next
+
+Phase 5 adds saved scenarios, comparison, and what-if projections on top of the now-working engine and simulation endpoint.
+
+## 15. Phase 5 Implementation Notes
+
+Phase 5 is now implemented. Users can compare saved scenarios side by side and run non-persistent what-if projections against an existing goal.
+
+### 15.1 Files Delivered
+
+```text
+src/main/java/com/saveapenny/goal/simulation/dto/
+  CompareScenariosRequest
+  WhatIfRequest
+  GoalScenarioComparisonResponse
+  GoalWhatIfResponse
+src/main/java/com/saveapenny/goal/
+  controller/   GoalSimulationController (extended)
+  service/      GoalSimulationService (extended)
+  service/impl/ GoalSimulationServiceImpl (extended)
+src/main/java/com/saveapenny/mcp/goal/
+  CompareScenariosToolInput
+  CompareScenariosToolHandler
+  WhatIfToolInput
+  WhatIfToolHandler
+src/test/java/com/saveapenny/mcp/goal/
+  Phase5GoalToolHandlersTest
+src/test/java/com/saveapenny/goal/integration/
+  GoalScenarioExplorationIntegrationTest
+```
+
+`SpringAiMcpToolAdapter` now exposes two additional read tools to the assistant layer:
+
+- `compare_scenarios`
+- `what_if`
+
+### 15.2 Implemented REST Surface
+
+The Phase 5 REST endpoints now available are:
+
+- `POST /api/v1/goals/{id}/scenarios/compare`
+- `POST /api/v1/goals/{id}/what-if`
+
+### 15.3 Behavior Implemented
+
+- Scenario comparison reuses the existing simulation engine and runs each selected scenario as a read-only projection.
+- If `scenarioIds` is omitted, the comparison uses the goal's scenarios ordered deterministically with baseline first, then by `createdAt`.
+- Comparison is capped at 10 scenarios.
+- The comparison response returns:
+  - scenario summaries
+  - baseline deltas
+  - disclaimer
+- What-if accepts a flat overrides object and merges it into the goal's `inputs.values` object.
+- What-if returns:
+  - `SimulationResult`
+  - `deltaVsBaseline`
+  - `projection = true`
+  - disclaimer
+- Neither comparison nor what-if creates a new `ScenarioEntity` or `GoalRunEntity`.
+
+### 15.4 Deviations From The Original Phase 5 Design
+
+1. **Comparison and what-if are implemented only for persisted goals.**
+   - This matches the intended Phase 5 direction.
+   - Draft prompt scenarios are not part of the comparison flow.
+
+2. **What-if overrides are applied only at the `values` level.**
+   - The override object is intentionally flat.
+   - Envelope fields such as `version` and `type` are inherited from the goal and are not overrideable.
+
+3. **Assistant formatting is minimal.**
+   - The Spring AI adapter exposes the new tools.
+   - The natural-language rendering is intentionally compact rather than fully narrative.
+
+### 15.5 Phase 5 Milestone Status
+
+- [x] A user can save a second scenario under the same goal and compare it with the baseline.
+- [x] Comparison highlights deltas in feasibility, required monthly contribution, and projected outcome.
+- [x] What-if is explicitly non-persistent.
+- [x] The assistant can run compare and what-if through the internal MCP adapter.
+
+### 15.6 What's Next
+
+Phase 6 adds progress tracking and off-track alerts on top of the persisted goals, scenarios, and simulation outputs.
+
+## 16. Phase 6 Implementation Notes
+
+Phase 6 is now implemented. Goal progress can be calculated deterministically, surfaced through the MCP read tool, and evaluated by a scheduler that emits one off-track notification per unread episode.
+
+### 16.1 Files Delivered
+
+```text
+src/main/java/com/saveapenny/goal/
+  config/       GoalConfig, GoalProgressProperties
+  notification/ GoalOffTrackNotifier
+  scheduler/    GoalProgressJob
+  service/      GoalProgressCalculator, GoalProgressReport
+  service/impl/ GoalProgressCalculatorImpl
+src/main/resources/db/migration/
+  V12__add_goal_off_track_notification_type.sql
+src/test/java/com/saveapenny/goal/
+  notification/ GoalOffTrackNotifierTest
+  integration/  GoalProgressJobIntegrationTest
+  service/impl/ GoalProgressCalculatorImplTest
+```
+
+Supporting updates:
+
+- `NotificationType` now includes `GOAL_OFF_TRACK`.
+- `NotificationRepository` now includes `findAllByUserIdAndTypeAndReadFalse(...)` for unread off-track checks.
+- `GetGoalProgressToolHandler` now delegates to the new calculator and returns `baselineRunId` plus `offTrackForMonthsCount`.
+- `application.yml` now contains `goal.progress.*` properties and an updated assistant prompt paragraph for goal-status questions.
+
+### 16.2 Behavior Implemented
+
+- `GoalProgressCalculatorImpl` is a deterministic read-only component.
+- It loads the goal through the ownership-scoped `GoalService` path.
+- It identifies the baseline scenario and uses the latest baseline run when one exists.
+- It derives `currentAmount` from the goal input envelope using the current Phase 6 fallback order.
+- It returns structured warnings for:
+  - `NO_PROJECTION`
+  - `CURRENT_BALANCE_MISSING`
+  - `TARGET_DATE_PASSED`
+- `GoalProgressJob` runs on the configured cron and evaluates all `ACTIVE` goals with `deleted_at IS NULL`.
+- The job tracks consecutive off-track observations in memory and passes the streak count into the notifier.
+- `GoalOffTrackNotifier` creates a `GOAL_OFF_TRACK` notification only when:
+  - the goal is currently `OFF_TRACK`
+  - the off-track streak has reached the configured persistence threshold
+  - there is no existing unread off-track notification for the same goal title
+
+### 16.3 Deviations From The Original Phase 6 Target
+
+1. **Off-track persistence is tracked in memory by the scheduler.**
+   - The schema still has no dedicated persistence column for streak state.
+   - The current implementation keeps the consecutive off-track count in the `GoalProgressJob` component while the application is running.
+
+2. **Baseline run resolution uses the latest run exposed by Phase 1/4 surfaces.**
+   - Because run persistence is still minimal, the current implementation uses the goal detail's latest run when it belongs to the baseline scenario.
+   - A richer baseline-run lookup can be tightened further if later phases begin storing multiple runs per scenario at scale.
+
+3. **The calculator follows the Phase 6 deterministic formula even though it is intentionally conservative.**
+   - `deficit = projectedAmountAtTarget - currentAmount`
+   - This means progress is measured against the saved projection snapshot rather than against a recomputed ideal trajectory.
+
+### 16.4 Phase 6 Milestone Status
+
+- [x] `GoalProgressCalculator` is deterministic and unit-tested across achieved, on-track, at-risk, off-track, no-projection, missing-balance, and target-date-passed cases.
+- [x] `GoalOffTrackNotifier` unit tests cover idempotency and threshold gating.
+- [x] `GoalProgressJob` integration test verifies one off-track notification is created on the second run and not duplicated on later runs.
+- [x] `GetGoalProgressToolHandler` is rewired to the calculator and returns `baselineRunId` and `offTrackForMonthsCount`.
+- [x] `GoalProgressProperties` is bound from `application.yml`.
+- [x] Assistant prompt configuration now includes the on-track status intent.
+- [ ] A full project-wide `mvn test` run for all modules has not been executed as part of this Phase 6 step.
+
+### 16.5 What's Next
+
+Phase 7 hardens the goal write surface with explicit risk-policy enforcement, audit coverage, metrics, and rate limits.
