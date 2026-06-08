@@ -233,9 +233,14 @@ Examples of focused test commands:
 
 ## More Documentation
 
-- `USER-GUIDE.md`
-- `MCP_ROADMAP.md`
-- `technical-doc.md`
+See the [docs](docs/) folder:
+
+- [User Guide](docs/user-guide.md) — setup, configuration, usage flows
+- [API Contract](docs/api-contract.md) — complete endpoint reference
+- [Architecture](docs/architecture.md) — system design, data model, ADRs
+- [Goal Simulation](docs/goal-simulation.md) — goal types, engine design, implementation status
+- [MCP Platform](docs/mcp-roadmap.md) — AI tool platform roadmap
+- [OCR Improvement](docs/ocr-improvement-plan.md) — OCR parser enhancement plan
 
 ## Repository Focus
 

@@ -410,7 +410,6 @@ Check:
 
 ## Related Documents
 
-- `README.md`
-- `api-contract.md`
-- `assistant-technical-doc.md`
-- `assistant-implementation-plan.md`
+- [README](../README.md) — project overview
+- [API Contract](api-contract.md) — endpoint reference
+- [Architecture](architecture.md) — system design
