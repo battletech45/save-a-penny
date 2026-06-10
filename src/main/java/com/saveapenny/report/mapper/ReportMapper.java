@@ -4,6 +4,7 @@ import com.saveapenny.report.dto.CashFlowPointResponse;
 import com.saveapenny.report.dto.CategorySpendingResponse;
 import com.saveapenny.report.dto.MonthlySummaryResponse;
 import com.saveapenny.report.dto.NetWorthSnapshotResponse;
+import com.saveapenny.report.entity.NetWorthSnapshot;
 import com.saveapenny.report.repository.CashFlowPointView;
 import com.saveapenny.report.repository.CategorySpendingView;
 import java.math.BigDecimal;
@@ -46,4 +47,7 @@ public interface ReportMapper {
                 .netWorth(netWorth)
                 .build();
     }
+
+    @Mapping(target = "snapshotDate", source = "snapshotDate")
+    NetWorthSnapshotResponse toNetWorthSnapshotResponse(NetWorthSnapshot snapshot);
 }

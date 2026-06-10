@@ -5,9 +5,11 @@ import com.saveapenny.report.dto.CashFlowPointResponse;
 import com.saveapenny.report.dto.CategorySpendingResponse;
 import com.saveapenny.report.dto.MonthlySummaryResponse;
 import com.saveapenny.report.dto.NetWorthSnapshotResponse;
+import com.saveapenny.report.entity.NetWorthSnapshot;
 import com.saveapenny.report.exception.InvalidNetWorthSnapshotDateException;
 import com.saveapenny.report.exception.InvalidReportDateRangeException;
 import com.saveapenny.report.mapper.ReportMapper;
+import com.saveapenny.report.repository.NetWorthSnapshotRepository;
 import com.saveapenny.report.repository.ReportAccountRepository;
 import com.saveapenny.report.repository.ReportTransactionRepository;
 import com.saveapenny.report.service.ReportService;
@@ -28,14 +30,17 @@ public class ReportServiceImpl implements ReportService {
 
     private final ReportTransactionRepository reportTransactionRepository;
     private final ReportAccountRepository reportAccountRepository;
+    private final NetWorthSnapshotRepository netWorthSnapshotRepository;
     private final ReportMapper reportMapper;
 
     public ReportServiceImpl(
             ReportTransactionRepository reportTransactionRepository,
             ReportAccountRepository reportAccountRepository,
+            NetWorthSnapshotRepository netWorthSnapshotRepository,
             ReportMapper reportMapper) {
         this.reportTransactionRepository = reportTransactionRepository;
         this.reportAccountRepository = reportAccountRepository;
+        this.netWorthSnapshotRepository = netWorthSnapshotRepository;
         this.reportMapper = reportMapper;
     }
 
@@ -95,14 +100,28 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public NetWorthSnapshotResponse getNetWorth(UUID currentUserId, LocalDate snapshotDate) {
         validateSnapshotDate(snapshotDate);
+
+        var existing = netWorthSnapshotRepository.findByUserIdAndSnapshotDate(currentUserId, snapshotDate);
+        if (existing.isPresent()) {
+            return reportMapper.toNetWorthSnapshotResponse(existing.get());
+        }
 
         BigDecimal totalAssets = nullSafeAmount(reportAccountRepository.sumAssetsByUserId(currentUserId, AccountType.CREDIT));
         BigDecimal totalLiabilities = nullSafeAmount(
                 reportAccountRepository.sumLiabilitiesByUserId(currentUserId, AccountType.CREDIT));
         BigDecimal netWorth = totalAssets.subtract(totalLiabilities);
+
+        NetWorthSnapshot snapshot = NetWorthSnapshot.builder()
+                .userId(currentUserId)
+                .snapshotDate(snapshotDate)
+                .totalAssets(totalAssets)
+                .totalLiabilities(totalLiabilities)
+                .netWorth(netWorth)
+                .build();
+        netWorthSnapshotRepository.save(snapshot);
 
         return reportMapper.toNetWorthSnapshotResponse(snapshotDate, totalAssets, totalLiabilities, netWorth);
     }

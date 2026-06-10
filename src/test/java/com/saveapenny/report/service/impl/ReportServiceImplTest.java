@@ -12,9 +12,11 @@ import com.saveapenny.report.dto.MonthlySummaryResponse;
 import com.saveapenny.report.dto.NetWorthSnapshotResponse;
 import com.saveapenny.report.exception.InvalidNetWorthSnapshotDateException;
 import com.saveapenny.report.exception.InvalidReportDateRangeException;
+import com.saveapenny.report.entity.NetWorthSnapshot;
 import com.saveapenny.report.mapper.ReportMapper;
 import com.saveapenny.report.repository.CashFlowPointView;
 import com.saveapenny.report.repository.CategorySpendingView;
+import com.saveapenny.report.repository.NetWorthSnapshotRepository;
 import com.saveapenny.report.repository.ReportAccountRepository;
 import com.saveapenny.report.repository.ReportTransactionRepository;
 import com.saveapenny.transaction.entity.TransactionType;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +40,8 @@ class ReportServiceImplTest {
     private ReportTransactionRepository reportTransactionRepository;
     @Mock
     private ReportAccountRepository reportAccountRepository;
+    @Mock
+    private NetWorthSnapshotRepository netWorthSnapshotRepository;
     @Mock
     private ReportMapper reportMapper;
 
@@ -161,8 +166,40 @@ class ReportServiceImplTest {
     }
 
     @Test
-    void getNetWorth_returnsMappedSnapshot_whenSnapshotDateValid() {
+    void getNetWorth_returnsExistingSnapshot_whenFound() {
         LocalDate snapshotDate = LocalDate.now().minusDays(1);
+        NetWorthSnapshot snapshot = NetWorthSnapshot.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .snapshotDate(snapshotDate)
+                .totalAssets(new BigDecimal("5000.0000"))
+                .totalLiabilities(new BigDecimal("1200.0000"))
+                .netWorth(new BigDecimal("3800.0000"))
+                .build();
+
+        when(netWorthSnapshotRepository.findByUserIdAndSnapshotDate(userId, snapshotDate))
+                .thenReturn(Optional.of(snapshot));
+
+        NetWorthSnapshotResponse mapped = NetWorthSnapshotResponse.builder()
+                .snapshotDate(snapshotDate)
+                .totalAssets(new BigDecimal("5000.0000"))
+                .totalLiabilities(new BigDecimal("1200.0000"))
+                .netWorth(new BigDecimal("3800.0000"))
+                .build();
+        when(reportMapper.toNetWorthSnapshotResponse(snapshot))
+                .thenReturn(mapped);
+
+        NetWorthSnapshotResponse result = reportService.getNetWorth(userId, snapshotDate);
+
+        assertEquals(new BigDecimal("3800.0000"), result.getNetWorth());
+    }
+
+    @Test
+    void getNetWorth_computesAndStoresSnapshot_whenNotFound() {
+        LocalDate snapshotDate = LocalDate.now().minusDays(1);
+
+        when(netWorthSnapshotRepository.findByUserIdAndSnapshotDate(userId, snapshotDate))
+                .thenReturn(Optional.empty());
         when(reportAccountRepository.sumAssetsByUserId(userId, AccountType.CREDIT)).thenReturn(new BigDecimal("5000.0000"));
         when(reportAccountRepository.sumLiabilitiesByUserId(userId, AccountType.CREDIT)).thenReturn(new BigDecimal("1200.0000"));
 
