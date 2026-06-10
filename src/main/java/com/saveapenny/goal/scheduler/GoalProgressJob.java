@@ -3,6 +3,7 @@ package com.saveapenny.goal.scheduler;
 import com.saveapenny.goal.entity.GoalEntity;
 import com.saveapenny.goal.entity.GoalStatus;
 import com.saveapenny.goal.notification.GoalOffTrackNotifier;
+import com.saveapenny.goal.config.GoalProgressProperties;
 import com.saveapenny.goal.repository.GoalRepository;
 import com.saveapenny.goal.service.GoalProgressCalculator;
 import com.saveapenny.goal.service.GoalProgressReport;
@@ -23,6 +24,7 @@ public class GoalProgressJob {
 
     private static final Logger log = LoggerFactory.getLogger(GoalProgressJob.class);
 
+    private final GoalProgressProperties goalProgressProperties;
     private final GoalRepository goalRepository;
     private final GoalProgressCalculator goalProgressCalculator;
     private final GoalOffTrackNotifier goalOffTrackNotifier;
@@ -30,10 +32,12 @@ public class GoalProgressJob {
     private final Map<UUID, Integer> offTrackStreaks = new ConcurrentHashMap<>();
 
     public GoalProgressJob(
+            GoalProgressProperties goalProgressProperties,
             GoalRepository goalRepository,
             GoalProgressCalculator goalProgressCalculator,
             GoalOffTrackNotifier goalOffTrackNotifier,
             Clock assistantClock) {
+        this.goalProgressProperties = goalProgressProperties;
         this.goalRepository = goalRepository;
         this.goalProgressCalculator = goalProgressCalculator;
         this.goalOffTrackNotifier = goalOffTrackNotifier;
@@ -42,6 +46,9 @@ public class GoalProgressJob {
 
     @Scheduled(cron = "${goal.progress.cron:0 0 6 * * *}")
     public void evaluateAllActiveGoals() {
+        if (!goalProgressProperties.enabled()) {
+            return;
+        }
         LocalDate asOf = LocalDate.now(assistantClock);
         int pageNumber = 0;
         Page<GoalEntity> page;

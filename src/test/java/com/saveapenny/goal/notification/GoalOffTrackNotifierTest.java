@@ -98,7 +98,7 @@ class GoalOffTrackNotifierTest {
                 notificationRepository,
                 notificationService,
                 goalService,
-                new GoalProgressProperties(new BigDecimal("0.10"), new BigDecimal("0.05"), 2, "0 0 6 * * *"));
+                new GoalProgressProperties(true, new BigDecimal("0.10"), new BigDecimal("0.05"), 2, "0 0 6 * * *"));
     }
 
     private GoalDetailResponse goal(UUID goalId) {

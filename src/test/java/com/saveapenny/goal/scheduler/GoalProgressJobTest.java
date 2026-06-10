@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.saveapenny.goal.config.GoalProgressProperties;
 import com.saveapenny.goal.entity.GoalEntity;
 import com.saveapenny.goal.entity.GoalStatus;
 import com.saveapenny.goal.notification.GoalOffTrackNotifier;
@@ -16,6 +17,7 @@ import com.saveapenny.goal.repository.GoalRepository;
 import com.saveapenny.goal.service.GoalProgressCalculator;
 import com.saveapenny.goal.service.GoalProgressReport;
 import com.saveapenny.goal.service.GoalProgressReport.ProgressStatus;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,9 +56,12 @@ class GoalProgressJobTest {
     private UUID userId;
     private GoalEntity activeGoal;
 
+    private final GoalProgressProperties goalProgressProperties =
+            new GoalProgressProperties(true, new BigDecimal("0.10"), new BigDecimal("0.05"), 2, "0 0 6 * * *");
+
     @BeforeEach
     void setUp() {
-        job = new GoalProgressJob(goalRepository, goalProgressCalculator, goalOffTrackNotifier, fixedClock);
+        job = new GoalProgressJob(goalProgressProperties, goalRepository, goalProgressCalculator, goalOffTrackNotifier, fixedClock);
 
         goalId = UUID.randomUUID();
         userId = UUID.randomUUID();

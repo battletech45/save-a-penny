@@ -103,13 +103,14 @@ assistant:
 
 goal:
   progress:
+    enabled: false
     off-track-ratio: 0.10
     at-risk-ratio: 0.05
     off-track-persistence-months: 2
     cron: "0 0 6 * * *"
 
 insight:
-  enabled: true
+  enabled: false
   cron: "0 30 6 * * *"
   max-insights-per-generation: 10
   deduplication-window-days: 7
@@ -122,7 +123,7 @@ insight:
   openrouter-base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
 
 ocr:
-  enabled: true
+  enabled: false
   tessdata-path: /opt/homebrew/share/tessdata
   language: eng
   psm: 3

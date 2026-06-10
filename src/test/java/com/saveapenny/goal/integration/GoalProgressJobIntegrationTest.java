@@ -31,7 +31,8 @@ import org.springframework.test.context.TestPropertySource;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false",
-        "security.jwt.secret=0123456789012345678901234567890123456789012345678901234567890123"
+        "security.jwt.secret=0123456789012345678901234567890123456789012345678901234567890123",
+        "goal.progress.enabled=true"
 })
 class GoalProgressJobIntegrationTest {
 

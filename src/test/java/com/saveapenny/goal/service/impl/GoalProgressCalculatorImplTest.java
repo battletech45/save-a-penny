@@ -158,6 +158,6 @@ class GoalProgressCalculatorImplTest {
     }
 
     private GoalProgressProperties properties() {
-        return new GoalProgressProperties(new BigDecimal("0.10"), new BigDecimal("0.05"), 2, "0 0 6 * * *");
+        return new GoalProgressProperties(true, new BigDecimal("0.10"), new BigDecimal("0.05"), 2, "0 0 6 * * *");
     }
 }
