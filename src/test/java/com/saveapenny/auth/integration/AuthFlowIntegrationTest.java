@@ -1,6 +1,7 @@
 package com.saveapenny.auth.integration;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -100,13 +101,34 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
                 .andReturn();
 
         JsonNode refreshJson = objectMapper.readTree(refreshResult.getResponse().getContentAsString());
         String refreshedAccessToken = refreshJson.path("data").path("accessToken").asText();
+        String rotatedRefreshToken = refreshJson.path("data").path("refreshToken").asText();
 
         assertNotNull(loginAccessToken);
         assertNotNull(refreshedAccessToken);
+        assertNotEquals(loginRefreshToken, rotatedRefreshToken);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+
+        String rotatedRefreshBody = objectMapper.writeValueAsString(new Object() {
+            public final String refreshToken = rotatedRefreshToken;
+        });
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rotatedRefreshBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty());
 
         mockMvc.perform(get("/api/v1/users/me")
                         .header("Authorization", "Bearer " + refreshedAccessToken))

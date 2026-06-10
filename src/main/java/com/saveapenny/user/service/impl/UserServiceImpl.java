@@ -1,5 +1,6 @@
 package com.saveapenny.user.service.impl;
 
+import com.saveapenny.auth.service.RefreshTokenService;
 import com.saveapenny.user.dto.ChangePasswordRequest;
 import com.saveapenny.user.dto.UpdateUserProfileRequest;
 import com.saveapenny.user.dto.UserProfileResponse;
@@ -21,11 +22,17 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
     private final UserMapper userMapper;
 
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, UserMapper userMapper) {
+    public UserServiceImpl(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            RefreshTokenService refreshTokenService,
+            UserMapper userMapper) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.refreshTokenService = refreshTokenService;
         this.userMapper = userMapper;
     }
 
@@ -63,5 +70,6 @@ public class UserServiceImpl implements UserService {
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        refreshTokenService.revokeAllByUser(user);
     }
 }

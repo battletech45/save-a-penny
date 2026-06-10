@@ -173,21 +173,25 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void refresh_returnsAccessTokenResponse_whenRefreshTokenValid() {
+    void refresh_returnsAccessAndRotatedRefreshToken_whenRefreshTokenValid() {
         RefreshTokenRequest request = RefreshTokenRequest.builder().refreshToken("valid-refresh").build();
         RefreshToken rotatedToken = RefreshToken.builder().userId(userId).token("rotated").build();
-        RefreshTokenResponse mapped = RefreshTokenResponse.builder().accessToken("new-access").build();
+        RefreshTokenResponse mapped = RefreshTokenResponse.builder()
+                .accessToken("new-access")
+                .refreshToken("rotated")
+                .build();
         User userForRefresh = User.builder().id(userId).email("john@example.com").userRoles(Set.of()).build();
 
         when(refreshTokenService.rotate("valid-refresh")).thenReturn(rotatedToken);
         when(userRepository.findById(userId)).thenReturn(Optional.of(userForRefresh));
         when(jwtService.generateAccessToken(userForRefresh)).thenReturn("new-access");
         when(jwtService.getAccessTokenExpirySeconds()).thenReturn(900L);
-        when(authMapper.toRefreshTokenResponse("new-access", 900L)).thenReturn(mapped);
+        when(authMapper.toRefreshTokenResponse("new-access", "rotated", 900L)).thenReturn(mapped);
 
         RefreshTokenResponse result = authService.refresh(request);
 
         assertEquals("new-access", result.getAccessToken());
+        assertEquals("rotated", result.getRefreshToken());
     }
 
     @Test

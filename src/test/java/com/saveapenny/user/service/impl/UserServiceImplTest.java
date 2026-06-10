@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.saveapenny.auth.service.RefreshTokenService;
 import com.saveapenny.user.dto.ChangePasswordRequest;
 import com.saveapenny.user.dto.UpdateUserProfileRequest;
 import com.saveapenny.user.dto.UserProfileResponse;
@@ -35,6 +36,9 @@ class UserServiceImplTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @Mock
     private UserMapper userMapper;
@@ -126,6 +130,7 @@ class UserServiceImplTest {
 
         assertEquals("hashed-new", user.getPasswordHash());
         verify(userRepository).save(user);
+        verify(refreshTokenService).revokeAllByUser(user);
     }
 
     @Test

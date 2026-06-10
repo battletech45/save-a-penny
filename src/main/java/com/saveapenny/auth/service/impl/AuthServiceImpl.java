@@ -119,7 +119,10 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(InvalidRefreshTokenException::new);
 
         String accessToken = jwtService.generateAccessToken(user);
-        return authMapper.toRefreshTokenResponse(accessToken, jwtService.getAccessTokenExpirySeconds());
+        return authMapper.toRefreshTokenResponse(
+                accessToken,
+                rotatedToken.getToken(),
+                jwtService.getAccessTokenExpirySeconds());
     }
 
     @Override
