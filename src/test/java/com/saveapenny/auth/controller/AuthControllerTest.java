@@ -111,10 +111,11 @@ class AuthControllerTest {
     }
 
     @Test
-    void refresh_returnsAccessTokenEnvelope() throws Exception {
+    void refresh_returnsAccessAndRefreshTokenEnvelope() throws Exception {
         RefreshTokenRequest request = RefreshTokenRequest.builder().refreshToken("refresh-token").build();
         RefreshTokenResponse response = RefreshTokenResponse.builder()
                 .accessToken("new-access-token")
+                .refreshToken("rotated-refresh-token")
                 .tokenType("Bearer")
                 .expiresIn(900)
                 .build();
@@ -127,7 +128,7 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
-                .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
+                .andExpect(jsonPath("$.data.refreshToken").value("rotated-refresh-token"));
     }
 
     @Test

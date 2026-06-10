@@ -53,7 +53,8 @@ class UserFlowIntegrationTest {
 
     @Test
     void userProfileAndPasswordLifecycle_works() throws Exception {
-        String token = registerAndGetToken();
+        AuthTokens tokens = registerAndGetTokens();
+        String token = tokens.accessToken();
 
         mockMvc.perform(get("/api/v1/users/me")
                         .header("Authorization", "Bearer " + token))
@@ -86,6 +87,16 @@ class UserFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
+        String oldRefreshBody = """
+                {"refreshToken":"%s"}
+                """.formatted(tokens.refreshToken());
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(oldRefreshBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+
         String loginBody = """
                 {"email":"%s","password":"%s"}
                 """.formatted(EMAIL, NEW_PASSWORD);
@@ -108,7 +119,7 @@ class UserFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.fullName").value("Updated User"));
     }
 
-    private String registerAndGetToken() throws Exception {
+    private AuthTokens registerAndGetTokens() throws Exception {
         String registerBody = """
                 {
                   "email": "%s",
@@ -124,6 +135,11 @@ class UserFlowIntegrationTest {
                 .andReturn();
 
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
-        return json.path("data").path("accessToken").asText();
+        return new AuthTokens(
+                json.path("data").path("accessToken").asText(),
+                json.path("data").path("refreshToken").asText());
+    }
+
+    private record AuthTokens(String accessToken, String refreshToken) {
     }
 }

@@ -16,9 +16,10 @@ public interface AuthMapper {
                 .build();
     }
 
-    default RefreshTokenResponse toRefreshTokenResponse(String accessToken, long expiresIn) {
+    default RefreshTokenResponse toRefreshTokenResponse(String accessToken, String refreshToken, long expiresIn) {
         return RefreshTokenResponse.builder()
                 .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(expiresIn)
                 .build();

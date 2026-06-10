@@ -23,9 +23,10 @@ class AuthMapperTest {
 
     @Test
     void toRefreshTokenResponse_mapsFields() {
-        RefreshTokenResponse response = authMapper.toRefreshTokenResponse("new-access-token", 1800L);
+        RefreshTokenResponse response = authMapper.toRefreshTokenResponse("new-access-token", "new-refresh-token", 1800L);
 
         assertEquals("new-access-token", response.getAccessToken());
+        assertEquals("new-refresh-token", response.getRefreshToken());
         assertEquals("Bearer", response.getTokenType());
         assertEquals(1800L, response.getExpiresIn());
     }
