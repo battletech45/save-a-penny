@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.saveapenny.automation.repository.RecurringExecutionHistoryRepository;
 import com.saveapenny.automation.repository.RecurringTransactionRepository;
 import com.saveapenny.automation.service.RecurringTransactionExecutionService;
 import com.saveapenny.transaction.repository.TransactionRepository;
@@ -57,6 +58,9 @@ class RecurringTransactionFlowIntegrationTest {
 
     @Autowired
     private TransactionRepository transactionRepository;
+
+    @Autowired
+    private RecurringExecutionHistoryRepository executionHistoryRepository;
 
     private String today;
     private String tomorrow;
@@ -154,7 +158,13 @@ class RecurringTransactionFlowIntegrationTest {
         mockMvc.perform(get("/api/v1/automations/recurring-transactions/{id}/history", recurringId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].scheduledDate").value(today))
+                .andExpect(jsonPath("$.data.content[0].status").value("SUCCESS"));
+
+        assertThat(executionHistoryRepository.findAll()).hasSize(1);
+        assertThat(executionHistoryRepository.findAll().getFirst().getScheduledDate()).isEqualTo(LocalDate.parse(today));
 
         mockMvc.perform(get("/api/v1/automations/recurring-transactions/upcoming")
                         .header("Authorization", "Bearer " + token))

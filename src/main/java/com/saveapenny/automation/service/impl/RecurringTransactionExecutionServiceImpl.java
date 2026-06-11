@@ -90,7 +90,7 @@ public class RecurringTransactionExecutionServiceImpl implements RecurringTransa
                     .findByIdAndUserIdAndActiveTrue(recurringTransaction.getAccountId(), recurringTransaction.getUserId())
                     .orElse(null);
             if (account == null) {
-                recordHistory(recurringTransaction, RecurringExecutionStatus.SKIPPED,
+                recordHistory(recurringTransaction, currentRun, RecurringExecutionStatus.SKIPPED,
                         null, "Account is missing or inactive");
                 log.warn("Skipping recurring transaction {} because account is missing or inactive", recurringTransaction.getId());
                 return false;
@@ -123,11 +123,11 @@ public class RecurringTransactionExecutionServiceImpl implements RecurringTransa
             advanceNextRunDate(recurringTransaction);
             recurringTransactionRepository.save(recurringTransaction);
 
-            recordHistory(recurringTransaction, RecurringExecutionStatus.SUCCESS,
+            recordHistory(recurringTransaction, currentRun, RecurringExecutionStatus.SUCCESS,
                     transactionResponse.getId(), null);
             return true;
         } catch (RuntimeException ex) {
-            recordHistory(recurringTransaction, RecurringExecutionStatus.FAILED,
+            recordHistory(recurringTransaction, currentRun, RecurringExecutionStatus.FAILED,
                     null, ex.getMessage());
             log.warn("Failed to process recurring transaction {}: {}", recurringTransaction.getId(), ex.getMessage());
             return false;
@@ -146,15 +146,16 @@ public class RecurringTransactionExecutionServiceImpl implements RecurringTransa
     }
 
     private void recordHistory(RecurringTransaction recurringTransaction,
-                                RecurringExecutionStatus status,
-                                UUID transactionId,
-                                String failureReason) {
+                               LocalDate scheduledDate,
+                               RecurringExecutionStatus status,
+                               UUID transactionId,
+                               String failureReason) {
         try {
             RecurringExecutionHistory history = RecurringExecutionHistory.builder()
                     .recurringTransactionId(recurringTransaction.getId())
                     .userId(recurringTransaction.getUserId())
                     .status(status)
-                    .scheduledDate(recurringTransaction.getNextRunDate())
+                    .scheduledDate(scheduledDate)
                     .transactionId(transactionId)
                     .failureReason(failureReason)
                     .build();
