@@ -57,6 +57,9 @@ class RecurringTransactionExecutionServiceImplTest {
     @Captor
     private ArgumentCaptor<RecurringTransaction> recurringTransactionCaptor;
 
+    @Captor
+    private ArgumentCaptor<RecurringExecutionHistory> executionHistoryCaptor;
+
     @InjectMocks
     private RecurringTransactionExecutionServiceImpl executionService;
 
@@ -109,7 +112,10 @@ class RecurringTransactionExecutionServiceImplTest {
 
         verify(transactionService).create(eq(userId), any());
         verify(recurringTransactionRepository).save(recurring);
-        verify(executionHistoryRepository).save(any());
+        verify(executionHistoryRepository).save(executionHistoryCaptor.capture());
+        RecurringExecutionHistory history = executionHistoryCaptor.getValue();
+        assertThat(history.getScheduledDate()).isEqualTo(nextRunDate);
+        assertThat(history.getStatus()).isEqualTo(RecurringExecutionStatus.SUCCESS);
         verify(lockService).unlock(any());
     }
 
@@ -239,7 +245,10 @@ class RecurringTransactionExecutionServiceImplTest {
 
         verify(transactionService).create(eq(userId), any());
         verify(recurringTransactionRepository, never()).save(recurring);
-        verify(executionHistoryRepository).save(any());
+        verify(executionHistoryRepository).save(executionHistoryCaptor.capture());
+        RecurringExecutionHistory history = executionHistoryCaptor.getValue();
+        assertThat(history.getScheduledDate()).isEqualTo(nextRunDate);
+        assertThat(history.getStatus()).isEqualTo(RecurringExecutionStatus.FAILED);
         verify(lockService).unlock(any());
     }
 }
