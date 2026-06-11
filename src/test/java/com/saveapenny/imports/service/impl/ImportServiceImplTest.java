@@ -40,6 +40,8 @@ class ImportServiceImplTest {
     private ImportMapper importMapper;
     @Mock
     private ImportAsyncJobService importAsyncJobService;
+    @Mock
+    private ImportRowParser importRowParser;
 
     @InjectMocks
     private ImportServiceImpl importService;
@@ -75,6 +77,8 @@ class ImportServiceImplTest {
                 .build();
 
         when(importRepository.save(any(Import.class))).thenReturn(savedImport);
+        when(importRowParser.validate("EXPENSE,2026-05-01,12.50,USD,a1,c1")).thenReturn(null);
+        when(importRowParser.validate("EXPENSE,2026-05-02,not-a-number,USD,a2,c2")).thenReturn("Amount is invalid");
 
         ImportPreviewResponse response = importService.preview(userId, file);
 

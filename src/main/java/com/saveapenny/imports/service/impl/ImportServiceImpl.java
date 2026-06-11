@@ -17,7 +17,6 @@ import com.saveapenny.imports.service.ImportService;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,22 +30,23 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional
 public class ImportServiceImpl implements ImportService {
 
-    private static final int MIN_TRANSACTION_COLUMNS = 6;
-
     private final ImportRepository importRepository;
     private final ImportRowRepository importRowRepository;
     private final ImportMapper importMapper;
     private final ImportAsyncJobService importAsyncJobService;
+    private final ImportRowParser importRowParser;
 
     public ImportServiceImpl(
             ImportRepository importRepository,
             ImportRowRepository importRowRepository,
             ImportMapper importMapper,
-            ImportAsyncJobService importAsyncJobService) {
+            ImportAsyncJobService importAsyncJobService,
+            ImportRowParser importRowParser) {
         this.importRepository = importRepository;
         this.importRowRepository = importRowRepository;
         this.importMapper = importMapper;
         this.importAsyncJobService = importAsyncJobService;
+        this.importRowParser = importRowParser;
     }
 
     @Override
@@ -158,17 +158,8 @@ public class ImportServiceImpl implements ImportService {
     }
 
     private ImportRow buildImportRow(UUID importId, int rowNumber, String line) {
-        String[] parts = line.split(",", -1);
-
-        String errorMessage = null;
-        ImportRowStatus status = ImportRowStatus.VALID;
-        if (parts.length < MIN_TRANSACTION_COLUMNS) {
-            status = ImportRowStatus.FAILED;
-            errorMessage = "Expected at least " + MIN_TRANSACTION_COLUMNS + " columns";
-        } else if (!isDecimal(parts[2])) {
-            status = ImportRowStatus.FAILED;
-            errorMessage = "Amount is invalid";
-        }
+        String errorMessage = importRowParser.validate(line);
+        ImportRowStatus status = errorMessage == null ? ImportRowStatus.VALID : ImportRowStatus.FAILED;
 
         return ImportRow.builder()
                 .importId(importId)
@@ -181,15 +172,6 @@ public class ImportServiceImpl implements ImportService {
 
     private boolean isInvalidRow(ImportRow row) {
         return row.getStatus() == ImportRowStatus.FAILED;
-    }
-
-    private boolean isDecimal(String value) {
-        try {
-            new BigDecimal(value.trim());
-            return true;
-        } catch (RuntimeException ex) {
-            return false;
-        }
     }
 
     private String normalizeFileName(String originalFileName) {
