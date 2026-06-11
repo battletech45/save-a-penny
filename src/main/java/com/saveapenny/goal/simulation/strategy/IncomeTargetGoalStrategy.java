@@ -27,16 +27,20 @@ public class IncomeTargetGoalStrategy extends AbstractGoalSimulationStrategy {
         IncomeStrategy strategy = resolveIncomeStrategy(input);
 
         BigDecimal projectedIncome;
-        BigDecimal requiredGrowth;
-        BigDecimal currentGrowth;
+        BigDecimal requiredGrowthRate;
+        BigDecimal currentGrowthRate;
+        BigDecimal requiredIncomeIncrease;
+        BigDecimal currentIncomeIncrease;
 
         if (strategy == IncomeStrategy.LINEAR) {
             BigDecimal monthlyDelta = currentIncome.multiply(SimulationMath.percentToRate(expectedGrowthRate), SimulationMath.MATH_CONTEXT);
             projectedIncome = currentIncome.add(monthlyDelta.multiply(BigDecimal.valueOf(months), SimulationMath.MATH_CONTEXT));
-            requiredGrowth = months == 0
+            requiredIncomeIncrease = months == 0
                     ? BigDecimal.ZERO
                     : targetIncome.subtract(currentIncome).divide(BigDecimal.valueOf(months), SimulationMath.MATH_CONTEXT);
-            currentGrowth = monthlyDelta;
+            requiredGrowthRate = toMonthlyGrowthRatePercent(requiredIncomeIncrease, currentIncome);
+            currentIncomeIncrease = monthlyDelta;
+            currentGrowthRate = expectedGrowthRate;
         } else {
             projectedIncome = currentIncome;
             BigDecimal growthRate = SimulationMath.percentToRate(expectedGrowthRate);
@@ -44,26 +48,34 @@ public class IncomeTargetGoalStrategy extends AbstractGoalSimulationStrategy {
                 projectedIncome = projectedIncome.multiply(BigDecimal.ONE.add(growthRate), SimulationMath.MATH_CONTEXT);
             }
             if (currentIncome.compareTo(BigDecimal.ZERO) <= 0 || months == 0) {
-                requiredGrowth = targetIncome.compareTo(currentIncome) > 0 ? new BigDecimal("999") : BigDecimal.ZERO;
+                requiredGrowthRate = targetIncome.compareTo(currentIncome) > 0 ? new BigDecimal("999") : BigDecimal.ZERO;
             } else {
-                requiredGrowth = SimulationMath.pow(
+                requiredGrowthRate = SimulationMath.pow(
                                 targetIncome.divide(currentIncome, SimulationMath.MATH_CONTEXT),
                                 1.0 / months)
                         .subtract(BigDecimal.ONE)
                         .multiply(SimulationMath.HUNDRED);
             }
-            currentGrowth = expectedGrowthRate;
+            currentGrowthRate = expectedGrowthRate;
+            requiredIncomeIncrease = null;
+            currentIncomeIncrease = null;
         }
 
         SimulationResult result = newResult(supports(), input, months);
-        result.setFeasibility(classify(requiredGrowth, strategy));
+        result.setFeasibility(classify(requiredGrowthRate));
         putCommonAssumptions(input, result, BigDecimal.ZERO, BigDecimal.ZERO);
         result.getAssumptions().getValues().put("incomeStrategy", strategy.name());
         result.getAssumptions().getValues().put("expectedIncomeGrowthRate", SimulationMath.money(expectedGrowthRate));
         result.getSummary().put("targetMonthlyNetIncome", SimulationMath.money(targetIncome));
         result.getSummary().put("projectedMonthlyNetIncome", SimulationMath.money(projectedIncome));
-        result.getSummary().put("requiredMonthlyGrowthRate", SimulationMath.money(requiredGrowth));
-        result.getSummary().put("currentMonthlyGrowthRate", SimulationMath.money(currentGrowth));
+        result.getSummary().put("requiredMonthlyGrowthRate", SimulationMath.money(requiredGrowthRate));
+        result.getSummary().put("currentMonthlyGrowthRate", SimulationMath.money(currentGrowthRate));
+        if (requiredIncomeIncrease != null) {
+            result.getSummary().put("requiredMonthlyIncomeIncrease", SimulationMath.money(requiredIncomeIncrease));
+        }
+        if (currentIncomeIncrease != null) {
+            result.getSummary().put("currentMonthlyIncomeIncrease", SimulationMath.money(currentIncomeIncrease));
+        }
 
         BigDecimal runningIncome = currentIncome;
         LocalDate month = asOfDate.withDayOfMonth(1).plusMonths(1);
@@ -85,15 +97,25 @@ public class IncomeTargetGoalStrategy extends AbstractGoalSimulationStrategy {
         return result;
     }
 
-    private Feasibility classify(BigDecimal requiredGrowth, IncomeStrategy strategy) {
-        BigDecimal comparable = strategy == IncomeStrategy.LINEAR ? BigDecimal.ZERO : requiredGrowth;
-        if (comparable.compareTo(new BigDecimal("5")) > 0) {
+    private BigDecimal toMonthlyGrowthRatePercent(BigDecimal monthlyIncrease, BigDecimal currentIncome) {
+        if (monthlyIncrease == null || monthlyIncrease.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        if (currentIncome.compareTo(BigDecimal.ZERO) <= 0) {
+            return new BigDecimal("999");
+        }
+        return monthlyIncrease.divide(currentIncome, SimulationMath.MATH_CONTEXT)
+                .multiply(SimulationMath.HUNDRED);
+    }
+
+    private Feasibility classify(BigDecimal requiredGrowthRate) {
+        if (requiredGrowthRate.compareTo(new BigDecimal("5")) > 0) {
             return Feasibility.INFEASIBLE;
         }
-        if (comparable.compareTo(new BigDecimal("2")) >= 0) {
+        if (requiredGrowthRate.compareTo(new BigDecimal("2")) >= 0) {
             return Feasibility.AT_RISK;
         }
-        if (comparable.compareTo(new BigDecimal("0.5")) >= 0) {
+        if (requiredGrowthRate.compareTo(new BigDecimal("0.5")) >= 0) {
             return Feasibility.TIGHT;
         }
         return Feasibility.ON_TRACK;
