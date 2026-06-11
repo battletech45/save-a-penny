@@ -6,6 +6,7 @@ import com.saveapenny.imports.entity.ImportRowStatus;
 import com.saveapenny.imports.entity.ImportStatus;
 import com.saveapenny.imports.repository.ImportRepository;
 import com.saveapenny.imports.repository.ImportRowRepository;
+import com.saveapenny.transaction.service.TransactionService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,7 +18,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ImportAsyncJobService {
@@ -29,14 +29,21 @@ public class ImportAsyncJobService {
 
     private final ImportRepository importRepository;
     private final ImportRowRepository importRowRepository;
+    private final TransactionService transactionService;
+    private final ImportRowParser importRowParser;
 
-    public ImportAsyncJobService(ImportRepository importRepository, ImportRowRepository importRowRepository) {
+    public ImportAsyncJobService(
+            ImportRepository importRepository,
+            ImportRowRepository importRowRepository,
+            TransactionService transactionService,
+            ImportRowParser importRowParser) {
         this.importRepository = importRepository;
         this.importRowRepository = importRowRepository;
+        this.transactionService = transactionService;
+        this.importRowParser = importRowParser;
     }
 
     @Async("importTaskExecutor")
-    @Transactional
     public void processImportAsync(UUID importId) {
         Import importEntity = importRepository.findById(importId).orElse(null);
         if (importEntity == null) {
@@ -59,15 +66,23 @@ public class ImportAsyncJobService {
                 if (!seenHashes.add(transactionHash)) {
                     row.setStatus(ImportRowStatus.SKIPPED);
                     row.setErrorMessage("Duplicate transaction detected");
+                    importRowRepository.save(row);
                     continue;
                 }
 
-                row.setStatus(ImportRowStatus.IMPORTED);
-                row.setErrorMessage(null);
-                importedRows++;
-            }
+                try {
+                    transactionService.create(importEntity.getUserId(), importRowParser.parse(row.getRawData()));
+                    row.setStatus(ImportRowStatus.IMPORTED);
+                    row.setErrorMessage(null);
+                    importedRows++;
+                } catch (RuntimeException ex) {
+                    row.setStatus(ImportRowStatus.FAILED);
+                    row.setErrorMessage(resolveErrorMessage(ex));
+                    failedRows++;
+                }
 
-            importRowRepository.saveAll(rows);
+                importRowRepository.save(row);
+            }
 
             importEntity.setImportedRows(importedRows);
             importEntity.setFailedRows(failedRows);
@@ -78,6 +93,14 @@ public class ImportAsyncJobService {
             importRepository.save(importEntity);
             throw ex;
         }
+    }
+
+    private String resolveErrorMessage(RuntimeException ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            return "Import failed for row";
+        }
+        return message;
     }
 
     private String computeTransactionHash(String rawData) {

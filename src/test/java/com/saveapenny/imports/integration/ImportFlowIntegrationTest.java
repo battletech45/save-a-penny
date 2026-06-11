@@ -1,6 +1,7 @@
 package com.saveapenny.imports.integration;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,8 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.saveapenny.account.entity.Account;
+import com.saveapenny.account.repository.AccountRepository;
+import com.saveapenny.transaction.repository.TransactionRepository;
 import com.saveapenny.user.entity.Role;
 import com.saveapenny.user.repository.RoleRepository;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +49,12 @@ class ImportFlowIntegrationTest {
     @Autowired
     private RoleRepository roleRepository;
 
+    @Autowired
+    private TransactionRepository transactionRepository;
+
+    @Autowired
+    private AccountRepository accountRepository;
+
     @BeforeEach
     void setUpRole() {
         roleRepository.findByName("ROLE_USER")
@@ -50,23 +62,43 @@ class ImportFlowIntegrationTest {
     }
 
     @Test
-    void previewConfirmAndStatusFlow_worksEndToEnd() throws Exception {
+    void previewConfirmAndStatusFlow_persistsTransactionsAndUpdatesBalances() throws Exception {
         String token = registerAndGetToken("imports.flow@example.com", "Imports Flow");
+
+        String accountId = extractField(mockMvc.perform(post("/api/v1/accounts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Import Cash","type":"CASH","currency":"USD","initialBalance":1000.0000}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn(), "data", "id");
+
+        String categoryId = extractField(mockMvc.perform(post("/api/v1/categories")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Imported Food","type":"EXPENSE","color":"#00ff00","icon":"receipt"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn(), "data", "id");
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "transactions.csv",
                 "text/csv",
                 ("type,date,amount,currency,accountId,categoryId\n"
-                        + "EXPENSE,2026-05-01,10.50,USD,a1,c1\n"
-                        + "EXPENSE,2026-05-02,invalid,USD,a2,c2\n")
+                        + "EXPENSE,2026-05-01,10.50,USD,%s,%s,Lunch\n"
+                        + "EXPENSE,2026-05-01,10.50,USD,%s,%s,Lunch\n"
+                        + "EXPENSE,2026-05-02,invalid,USD,%s,%s,Bad amount\n")
+                        .formatted(accountId, categoryId, accountId, categoryId, accountId, categoryId)
                         .getBytes());
 
         MvcResult previewResult = mockMvc.perform(multipart("/api/v1/imports/transactions/preview")
                         .file(file)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.totalRows").value(2))
+                .andExpect(jsonPath("$.data.totalRows").value(3))
                 .andExpect(jsonPath("$.data.invalidRows").value(1))
                 .andReturn();
 
@@ -97,9 +129,22 @@ class ImportFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value(finalStatus))
-                .andExpect(jsonPath("$.data.totalRows").value(2));
+                .andExpect(jsonPath("$.data.totalRows").value(3))
+                .andExpect(jsonPath("$.data.importedRows").value(1))
+                .andExpect(jsonPath("$.data.failedRows").value(1));
 
         assertTrue("COMPLETED".equals(finalStatus) || "FAILED".equals(finalStatus));
+
+        mockMvc.perform(get("/api/v1/transactions")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].description").value("Lunch"))
+                .andExpect(jsonPath("$.data.content[0].amount").value(10.5));
+
+        assertEquals(1, transactionRepository.count());
+        Account account = accountRepository.findById(UUID.fromString(accountId)).orElseThrow();
+        assertEquals(0, account.getBalance().compareTo(new BigDecimal("989.5000")));
     }
 
     @Test

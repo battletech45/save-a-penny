@@ -1,7 +1,11 @@
 package com.saveapenny.imports.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,12 +15,15 @@ import com.saveapenny.imports.entity.ImportRowStatus;
 import com.saveapenny.imports.entity.ImportStatus;
 import com.saveapenny.imports.repository.ImportRepository;
 import com.saveapenny.imports.repository.ImportRowRepository;
+import com.saveapenny.transaction.dto.TransactionResponse;
+import com.saveapenny.transaction.exception.InvalidTransferException;
+import com.saveapenny.transaction.service.TransactionService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -29,14 +36,33 @@ class ImportAsyncJobServiceTest {
     @Mock
     private ImportRowRepository importRowRepository;
 
-    @InjectMocks
+    @Mock
+    private TransactionService transactionService;
+
+    private final ImportRowParser importRowParser = new ImportRowParser();
+
     private ImportAsyncJobService importAsyncJobService;
 
+    @BeforeEach
+    void setUp() {
+        importAsyncJobService = new ImportAsyncJobService(
+                importRepository,
+                importRowRepository,
+                transactionService,
+                importRowParser);
+    }
+
     @Test
-    void processImportAsync_marksDuplicateRowsAsSkipped() {
+    void processImportAsync_createsTransactionsAndMarksDuplicateRowsAsSkipped() {
         UUID importId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        UUID categoryOneId = UUID.randomUUID();
+        UUID categoryTwoId = UUID.randomUUID();
+        UUID categoryThreeId = UUID.randomUUID();
         Import importEntity = Import.builder()
                 .id(importId)
+                .userId(userId)
                 .status(ImportStatus.RUNNING)
                 .totalRows(3)
                 .build();
@@ -45,7 +71,7 @@ class ImportAsyncJobServiceTest {
                 .id(UUID.randomUUID())
                 .importId(importId)
                 .rowNumber(2)
-                .rawData("EXPENSE,2026-05-01,25.00,USD,11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222,Coffee")
+                .rawData("EXPENSE,2026-05-01,25.00,USD," + accountId + "," + categoryOneId + ",Coffee")
                 .status(ImportRowStatus.VALID)
                 .build();
 
@@ -53,7 +79,7 @@ class ImportAsyncJobServiceTest {
                 .id(UUID.randomUUID())
                 .importId(importId)
                 .rowNumber(3)
-                .rawData("EXPENSE,2026-05-01,25.00,USD,11111111-1111-1111-1111-111111111111,33333333-3333-3333-3333-333333333333,Coffee")
+                .rawData("EXPENSE,2026-05-01,25.00,USD," + accountId + "," + categoryTwoId + ",Coffee")
                 .status(ImportRowStatus.VALID)
                 .build();
 
@@ -61,12 +87,14 @@ class ImportAsyncJobServiceTest {
                 .id(UUID.randomUUID())
                 .importId(importId)
                 .rowNumber(4)
-                .rawData("EXPENSE,2026-05-02,10.00,USD,11111111-1111-1111-1111-111111111111,44444444-4444-4444-4444-444444444444,Snack")
+                .rawData("EXPENSE,2026-05-02,10.00,USD," + accountId + "," + categoryThreeId + ",Snack")
                 .status(ImportRowStatus.VALID)
                 .build();
 
         when(importRepository.findById(importId)).thenReturn(Optional.of(importEntity));
         when(importRowRepository.findAllByImportIdOrderByRowNumberAsc(importId)).thenReturn(List.of(row1, row2, row3));
+        when(transactionService.create(eq(userId), any()))
+                .thenReturn(TransactionResponse.builder().id(UUID.randomUUID()).build());
 
         importAsyncJobService.processImportAsync(importId);
 
@@ -79,7 +107,61 @@ class ImportAsyncJobServiceTest {
         assertEquals(0, importEntity.getFailedRows());
         assertEquals(ImportStatus.COMPLETED, importEntity.getStatus());
 
-        verify(importRowRepository).saveAll(any());
+        verify(transactionService, times(2)).create(eq(userId), any());
+        verify(importRowRepository, times(3)).save(any(ImportRow.class));
+        verify(importRepository).save(importEntity);
+    }
+
+    @Test
+    void processImportAsync_marksRowFailedWhenTransactionCreationFailsAndContinues() {
+        UUID importId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        UUID categoryOneId = UUID.randomUUID();
+        UUID categoryTwoId = UUID.randomUUID();
+
+        Import importEntity = Import.builder()
+                .id(importId)
+                .userId(userId)
+                .status(ImportStatus.RUNNING)
+                .totalRows(2)
+                .build();
+
+        ImportRow row1 = ImportRow.builder()
+                .id(UUID.randomUUID())
+                .importId(importId)
+                .rowNumber(2)
+                .rawData("EXPENSE,2026-05-01,250.00,USD," + accountId + "," + categoryOneId + ",Large purchase")
+                .status(ImportRowStatus.VALID)
+                .build();
+
+        ImportRow row2 = ImportRow.builder()
+                .id(UUID.randomUUID())
+                .importId(importId)
+                .rowNumber(3)
+                .rawData("EXPENSE,2026-05-02,10.00,USD," + accountId + "," + categoryTwoId + ",Snack")
+                .status(ImportRowStatus.VALID)
+                .build();
+
+        when(importRepository.findById(importId)).thenReturn(Optional.of(importEntity));
+        when(importRowRepository.findAllByImportIdOrderByRowNumberAsc(importId)).thenReturn(List.of(row1, row2));
+        doThrow(new InvalidTransferException("Account not found or inactive: " + accountId))
+                .when(transactionService)
+                .create(eq(userId), argThat(request -> request.getAmount().doubleValue() == 250.0d));
+        when(transactionService.create(eq(userId), argThat(request -> request.getAmount().doubleValue() == 10.0d)))
+                .thenReturn(TransactionResponse.builder().id(UUID.randomUUID()).build());
+
+        importAsyncJobService.processImportAsync(importId);
+
+        assertEquals(ImportRowStatus.FAILED, row1.getStatus());
+        assertEquals("Account not found or inactive: " + accountId, row1.getErrorMessage());
+        assertEquals(ImportRowStatus.IMPORTED, row2.getStatus());
+        assertEquals(1, importEntity.getImportedRows());
+        assertEquals(1, importEntity.getFailedRows());
+        assertEquals(ImportStatus.COMPLETED, importEntity.getStatus());
+
+        verify(transactionService, times(2)).create(eq(userId), any());
+        verify(importRowRepository, times(2)).save(any(ImportRow.class));
         verify(importRepository).save(importEntity);
     }
 }
