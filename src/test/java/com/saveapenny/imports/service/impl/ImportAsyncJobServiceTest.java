@@ -17,6 +17,7 @@ import com.saveapenny.imports.repository.ImportRepository;
 import com.saveapenny.imports.repository.ImportRowRepository;
 import com.saveapenny.transaction.dto.TransactionResponse;
 import com.saveapenny.transaction.exception.InvalidTransferException;
+import com.saveapenny.transaction.repository.TransactionRepository;
 import com.saveapenny.transaction.service.TransactionService;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +40,9 @@ class ImportAsyncJobServiceTest {
     @Mock
     private TransactionService transactionService;
 
+    @Mock
+    private TransactionRepository transactionRepository;
+
     private final ImportRowParser importRowParser = new ImportRowParser();
 
     private ImportAsyncJobService importAsyncJobService;
@@ -49,6 +53,7 @@ class ImportAsyncJobServiceTest {
                 importRepository,
                 importRowRepository,
                 transactionService,
+                transactionRepository,
                 importRowParser);
     }
 
@@ -93,6 +98,8 @@ class ImportAsyncJobServiceTest {
 
         when(importRepository.findById(importId)).thenReturn(Optional.of(importEntity));
         when(importRowRepository.findAllByImportIdOrderByRowNumberAsc(importId)).thenReturn(List.of(row1, row2, row3));
+        when(transactionRepository.existsByUserIdAndAccountIdAndAmountAndTransactionDate(any(), any(), any(), any()))
+                .thenReturn(false);
         when(transactionService.create(eq(userId), any()))
                 .thenReturn(TransactionResponse.builder().id(UUID.randomUUID()).build());
 
@@ -145,6 +152,8 @@ class ImportAsyncJobServiceTest {
 
         when(importRepository.findById(importId)).thenReturn(Optional.of(importEntity));
         when(importRowRepository.findAllByImportIdOrderByRowNumberAsc(importId)).thenReturn(List.of(row1, row2));
+        when(transactionRepository.existsByUserIdAndAccountIdAndAmountAndTransactionDate(any(), any(), any(), any()))
+                .thenReturn(false);
         doThrow(new InvalidTransferException("Account not found or inactive: " + accountId))
                 .when(transactionService)
                 .create(eq(userId), argThat(request -> request.getAmount().doubleValue() == 250.0d));

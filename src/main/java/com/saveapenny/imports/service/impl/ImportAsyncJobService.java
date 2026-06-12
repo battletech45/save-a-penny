@@ -6,7 +6,10 @@ import com.saveapenny.imports.entity.ImportRowStatus;
 import com.saveapenny.imports.entity.ImportStatus;
 import com.saveapenny.imports.repository.ImportRepository;
 import com.saveapenny.imports.repository.ImportRowRepository;
+import com.saveapenny.transaction.dto.CreateTransactionRequest;
+import com.saveapenny.transaction.repository.TransactionRepository;
 import com.saveapenny.transaction.service.TransactionService;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -30,16 +33,19 @@ public class ImportAsyncJobService {
     private final ImportRepository importRepository;
     private final ImportRowRepository importRowRepository;
     private final TransactionService transactionService;
+    private final TransactionRepository transactionRepository;
     private final ImportRowParser importRowParser;
 
     public ImportAsyncJobService(
             ImportRepository importRepository,
             ImportRowRepository importRowRepository,
             TransactionService transactionService,
+            TransactionRepository transactionRepository,
             ImportRowParser importRowParser) {
         this.importRepository = importRepository;
         this.importRowRepository = importRowRepository;
         this.transactionService = transactionService;
+        this.transactionRepository = transactionRepository;
         this.importRowParser = importRowParser;
     }
 
@@ -71,7 +77,18 @@ public class ImportAsyncJobService {
                 }
 
                 try {
-                    transactionService.create(importEntity.getUserId(), importRowParser.parse(row.getRawData()));
+                    CreateTransactionRequest parsed = importRowParser.parse(row.getRawData());
+                    if (transactionRepository.existsByUserIdAndAccountIdAndAmountAndTransactionDate(
+                            importEntity.getUserId(),
+                            parsed.getAccountId(),
+                            parsed.getAmount(),
+                            parsed.getTransactionDate())) {
+                        row.setStatus(ImportRowStatus.SKIPPED);
+                        row.setErrorMessage("Duplicate transaction detected (cross-import)");
+                        importRowRepository.save(row);
+                        continue;
+                    }
+                    transactionService.create(importEntity.getUserId(), parsed);
                     row.setStatus(ImportRowStatus.IMPORTED);
                     row.setErrorMessage(null);
                     importedRows++;

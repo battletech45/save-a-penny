@@ -17,6 +17,7 @@ import com.saveapenny.imports.service.ImportService;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -131,7 +132,15 @@ public class ImportServiceImpl implements ImportService {
     }
 
     private List<ImportRow> parseRows(UUID importId, MultipartFile file) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+        try (PushbackInputStream pushback = new PushbackInputStream(file.getInputStream(), 3);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(pushback, StandardCharsets.UTF_8))) {
+            byte[] bom = new byte[3];
+            int bomRead = pushback.read(bom);
+            if (bomRead < 3 || (bom[0] & 0xFF) != 0xEF || (bom[1] & 0xFF) != 0xBB || (bom[2] & 0xFF) != 0xBF) {
+                if (bomRead > 0) {
+                    pushback.unread(bom, 0, bomRead);
+                }
+            }
             String header = reader.readLine();
             if (header == null || header.isBlank()) {
                 throw new InvalidImportFileException("header row is missing");
