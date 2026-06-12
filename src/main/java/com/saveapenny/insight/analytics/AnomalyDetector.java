@@ -110,6 +110,6 @@ public class AnomalyDetector {
                 .map(v -> v.subtract(mean).pow(2))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(values.size()), 4, RoundingMode.HALF_UP);
-        return BigDecimal.valueOf(Math.sqrt(variance.doubleValue()));
+        return variance.sqrt(new java.math.MathContext(4, RoundingMode.HALF_UP));
     }
 }

@@ -14,6 +14,8 @@ public interface RecurringTransactionRepository extends JpaRepository<RecurringT
 
     Optional<RecurringTransaction> findByIdAndUserIdAndStatus(UUID id, UUID userId, RecurringStatus status);
 
+    Page<RecurringTransaction> findAllByUserId(UUID userId, Pageable pageable);
+
     Page<RecurringTransaction> findAllByUserIdAndStatus(UUID userId, RecurringStatus status, Pageable pageable);
 
     List<RecurringTransaction> findAllByUserIdAndStatusAndNextRunDateLessThanEqual(

@@ -2,6 +2,8 @@ package com.saveapenny.report.service.impl;
 
 import com.saveapenny.account.entity.AccountType;
 import com.saveapenny.report.dto.CashFlowPointResponse;
+import java.util.List;
+import java.util.Set;
 import com.saveapenny.report.dto.CategorySpendingResponse;
 import com.saveapenny.report.dto.MonthlySummaryResponse;
 import com.saveapenny.report.dto.NetWorthSnapshotResponse;
@@ -27,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportServiceImpl implements ReportService {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+    private static final List<AccountType> LIABILITY_ACCOUNT_TYPES = List.of(AccountType.CREDIT);
 
     private final ReportTransactionRepository reportTransactionRepository;
     private final ReportAccountRepository reportAccountRepository;
@@ -109,9 +112,9 @@ public class ReportServiceImpl implements ReportService {
             return reportMapper.toNetWorthSnapshotResponse(existing.get());
         }
 
-        BigDecimal totalAssets = nullSafeAmount(reportAccountRepository.sumAssetsByUserId(currentUserId, AccountType.CREDIT));
+        BigDecimal totalAssets = nullSafeAmount(reportAccountRepository.sumAssetsByUserId(currentUserId, LIABILITY_ACCOUNT_TYPES));
         BigDecimal totalLiabilities = nullSafeAmount(
-                reportAccountRepository.sumLiabilitiesByUserId(currentUserId, AccountType.CREDIT));
+                reportAccountRepository.sumLiabilitiesByUserId(currentUserId, LIABILITY_ACCOUNT_TYPES));
         BigDecimal netWorth = totalAssets.subtract(totalLiabilities);
 
         NetWorthSnapshot snapshot = NetWorthSnapshot.builder()

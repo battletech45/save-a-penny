@@ -627,7 +627,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .details(List.of())
                 .build();
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.failure(error));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure(error));
     }
 
     private String toMessage(FieldError fieldError) {

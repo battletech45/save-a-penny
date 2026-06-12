@@ -150,19 +150,15 @@ public class RecurringTransactionExecutionServiceImpl implements RecurringTransa
                                RecurringExecutionStatus status,
                                UUID transactionId,
                                String failureReason) {
-        try {
-            RecurringExecutionHistory history = RecurringExecutionHistory.builder()
-                    .recurringTransactionId(recurringTransaction.getId())
-                    .userId(recurringTransaction.getUserId())
-                    .status(status)
-                    .scheduledDate(scheduledDate)
-                    .transactionId(transactionId)
-                    .failureReason(failureReason)
-                    .build();
-            executionHistoryRepository.save(history);
-        } catch (Exception ex) {
-            log.warn("Failed to persist execution history for {}: {}", recurringTransaction.getId(), ex.getMessage());
-        }
+        RecurringExecutionHistory history = RecurringExecutionHistory.builder()
+                .recurringTransactionId(recurringTransaction.getId())
+                .userId(recurringTransaction.getUserId())
+                .status(status)
+                .scheduledDate(scheduledDate)
+                .transactionId(transactionId)
+                .failureReason(failureReason)
+                .build();
+        executionHistoryRepository.save(history);
     }
 
     private LocalDate nextRunDate(LocalDate current, RecurringFrequency frequency) {

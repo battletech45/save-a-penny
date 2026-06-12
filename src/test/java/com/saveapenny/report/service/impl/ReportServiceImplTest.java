@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.saveapenny.account.entity.AccountType;
 import com.saveapenny.report.dto.CashFlowPointResponse;
+import java.util.List;
 import com.saveapenny.report.dto.CategorySpendingResponse;
 import com.saveapenny.report.dto.MonthlySummaryResponse;
 import com.saveapenny.report.dto.NetWorthSnapshotResponse;
@@ -200,8 +201,8 @@ class ReportServiceImplTest {
 
         when(netWorthSnapshotRepository.findByUserIdAndSnapshotDate(userId, snapshotDate))
                 .thenReturn(Optional.empty());
-        when(reportAccountRepository.sumAssetsByUserId(userId, AccountType.CREDIT)).thenReturn(new BigDecimal("5000.0000"));
-        when(reportAccountRepository.sumLiabilitiesByUserId(userId, AccountType.CREDIT)).thenReturn(new BigDecimal("1200.0000"));
+        when(reportAccountRepository.sumAssetsByUserId(userId, List.of(AccountType.CREDIT))).thenReturn(new BigDecimal("5000.0000"));
+        when(reportAccountRepository.sumLiabilitiesByUserId(userId, List.of(AccountType.CREDIT))).thenReturn(new BigDecimal("1200.0000"));
 
         NetWorthSnapshotResponse mapped = NetWorthSnapshotResponse.builder()
                 .snapshotDate(snapshotDate)

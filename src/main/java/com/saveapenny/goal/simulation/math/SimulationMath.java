@@ -48,11 +48,18 @@ public final class SimulationMath {
         if (exponent == 0) {
             return BigDecimal.ONE;
         }
-        return BigDecimal.valueOf(Math.pow(base.doubleValue(), exponent));
+        return base.pow(exponent, MATH_CONTEXT);
     }
 
     public static BigDecimal pow(BigDecimal base, double exponent) {
-        return BigDecimal.valueOf(Math.pow(base.doubleValue(), exponent));
+        if (exponent == (int) exponent) {
+            return pow(base, (int) exponent);
+        }
+        if (base.signum() == 0) {
+            return exponent == 0 ? BigDecimal.ONE : BigDecimal.ZERO;
+        }
+        BigDecimal result = BigDecimal.valueOf(Math.pow(base.doubleValue(), exponent));
+        return result;
     }
 
     public static BigDecimal futureValue(BigDecimal startBalance, BigDecimal contribution, BigDecimal annualPercent, int months) {

@@ -150,7 +150,7 @@ class RecurringTransactionServiceImplTest {
     @Test
     void getAll_returnsPage() {
         RecurringTransaction row = RecurringTransaction.builder().id(recurringId).build();
-        when(recurringTransactionRepository.findAllByUserIdAndStatus(userId, RecurringStatus.ACTIVE, PageRequest.of(0, 20)))
+        when(recurringTransactionRepository.findAllByUserId(userId, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(List.of(row)));
         when(recurringTransactionMapper.toResponse(row)).thenReturn(RecurringTransactionResponse.builder().id(recurringId).build());
 
@@ -264,5 +264,26 @@ class RecurringTransactionServiceImplTest {
         RecurringTransactionResponse result = recurringTransactionService.update(userId, recurringId, request);
         assertEquals(recurringId, result.getId());
         verify(recurringTransactionMapper).updateEntity(recurringTransaction, request);
+    }
+
+    @Test
+    void update_throws_whenStatusTransitionRequestedDirectly() {
+        UpdateRecurringTransactionRequest request = UpdateRecurringTransactionRequest.builder()
+                .accountId(accountId)
+                .categoryId(categoryId)
+                .type(TransactionType.INCOME)
+                .amount(new BigDecimal("50.0000"))
+                .frequency(RecurringFrequency.DAILY)
+                .nextRunDate(LocalDate.now().plusDays(1))
+                .status(RecurringStatus.PAUSED)
+                .build();
+        RecurringTransaction recurringTransaction = RecurringTransaction.builder().id(recurringId).userId(userId).status(RecurringStatus.ACTIVE).build();
+
+        when(accountRepository.existsByIdAndUserIdAndActiveTrue(accountId, userId)).thenReturn(true);
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(Category.builder().id(categoryId).userId(userId).build()));
+        when(recurringTransactionRepository.findById(recurringId)).thenReturn(Optional.of(recurringTransaction));
+
+        assertThrows(com.saveapenny.automation.exception.InvalidRecurringTransactionStatusTransitionException.class,
+                () -> recurringTransactionService.update(userId, recurringId, request));
     }
 }

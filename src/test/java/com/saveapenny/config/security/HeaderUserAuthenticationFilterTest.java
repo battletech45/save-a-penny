@@ -2,12 +2,16 @@ package com.saveapenny.config.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saveapenny.auth.service.JwtService;
 import jakarta.servlet.FilterChain;
+import java.io.ByteArrayOutputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.UUID;
@@ -18,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.DelegatingServletOutputStream;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +30,9 @@ class HeaderUserAuthenticationFilterTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private ObjectMapper objectMapper;
 
     @InjectMocks
     private HeaderUserAuthenticationFilter filter;
@@ -41,6 +49,11 @@ class HeaderUserAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
+        try {
+            lenient().when(response.getOutputStream()).thenReturn(new DelegatingServletOutputStream(new ByteArrayOutputStream()));
+        } catch (java.io.IOException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     @AfterEach
@@ -54,7 +67,6 @@ class HeaderUserAuthenticationFilterTest {
         String token = "valid-jwt-token";
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
-        when(jwtService.isAccessTokenValid(token)).thenReturn(true);
         when(jwtService.extractUserId(token)).thenReturn(userId);
 
         filter.doFilterInternal(request, response, filterChain);
@@ -69,11 +81,12 @@ class HeaderUserAuthenticationFilterTest {
         String token = "invalid-jwt-token";
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
-        when(jwtService.isAccessTokenValid(token)).thenReturn(false);
+        when(jwtService.extractUserId(token)).thenThrow(new RuntimeException("Invalid token"));
 
         filter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(401);
+        verify(objectMapper).writeValue(any(java.io.OutputStream.class), any());
         verifyNoInteractions(filterChain);
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
@@ -103,11 +116,12 @@ class HeaderUserAuthenticationFilterTest {
         String token = "malformed-jwt";
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
-        when(jwtService.isAccessTokenValid(token)).thenThrow(new RuntimeException("JWT parse error"));
+        when(jwtService.extractUserId(token)).thenThrow(new RuntimeException("JWT parse error"));
 
         filter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(401);
+        verify(objectMapper).writeValue(any(java.io.OutputStream.class), any());
         verifyNoInteractions(filterChain);
     }
 
@@ -128,11 +142,12 @@ class HeaderUserAuthenticationFilterTest {
     @Test
     void returns401_whenEmptyBearerToken() throws Exception {
         when(request.getHeader("Authorization")).thenReturn("Bearer ");
-        when(jwtService.isAccessTokenValid("")).thenReturn(false);
+        when(jwtService.extractUserId("")).thenThrow(new RuntimeException("Empty token"));
 
         filter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(401);
+        verify(objectMapper).writeValue(any(java.io.OutputStream.class), any());
         verifyNoInteractions(filterChain);
     }
 }

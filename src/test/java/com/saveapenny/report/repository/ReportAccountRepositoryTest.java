@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.saveapenny.account.entity.Account;
 import com.saveapenny.account.entity.AccountType;
 import jakarta.persistence.EntityManager;
+import java.util.List;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -81,19 +82,19 @@ class ReportAccountRepositoryTest {
 
     @Test
     void sumAssetsByUserId_excludesLiabilityType() {
-        BigDecimal sum = reportAccountRepository.sumAssetsByUserId(userId, AccountType.CREDIT);
+        BigDecimal sum = reportAccountRepository.sumAssetsByUserId(userId, List.of(AccountType.CREDIT));
         assertEquals(0, sum.compareTo(new BigDecimal("10000.0000")));
     }
 
     @Test
     void sumAssetsByUserId_excludesInactiveAccounts() {
-        BigDecimal sum = reportAccountRepository.sumAssetsByUserId(userId, AccountType.CREDIT);
+        BigDecimal sum = reportAccountRepository.sumAssetsByUserId(userId, List.of(AccountType.CREDIT));
         assertEquals(0, sum.compareTo(new BigDecimal("10000.0000")));
     }
 
     @Test
     void sumLiabilitiesByUserId_returnsLiabilityBalance() {
-        BigDecimal sum = reportAccountRepository.sumLiabilitiesByUserId(userId, AccountType.CREDIT);
+        BigDecimal sum = reportAccountRepository.sumLiabilitiesByUserId(userId, List.of(AccountType.CREDIT));
         assertEquals(0, sum.compareTo(new BigDecimal("500.0000")));
     }
 }
