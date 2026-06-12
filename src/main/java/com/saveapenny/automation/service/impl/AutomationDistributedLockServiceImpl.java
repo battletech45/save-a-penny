@@ -41,6 +41,7 @@ public class AutomationDistributedLockServiceImpl implements AutomationDistribut
                 lock.unlock();
             }
         }
+        fallbackLocks.remove(lockName);
     }
 
     private long lockKey(String lockName) {

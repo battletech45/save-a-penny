@@ -73,7 +73,7 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
     @Override
     @Transactional(readOnly = true)
     public Page<RecurringTransactionResponse> getAll(UUID currentUserId, Pageable pageable) {
-        return recurringTransactionRepository.findAllByUserIdAndStatus(currentUserId, RecurringStatus.ACTIVE, pageable)
+        return recurringTransactionRepository.findAllByUserId(currentUserId, pageable)
                 .map(recurringTransactionMapper::toResponse);
     }
 

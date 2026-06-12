@@ -150,7 +150,7 @@ class RecurringTransactionServiceImplTest {
     @Test
     void getAll_returnsPage() {
         RecurringTransaction row = RecurringTransaction.builder().id(recurringId).build();
-        when(recurringTransactionRepository.findAllByUserIdAndStatus(userId, RecurringStatus.ACTIVE, PageRequest.of(0, 20)))
+        when(recurringTransactionRepository.findAllByUserId(userId, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(List.of(row)));
         when(recurringTransactionMapper.toResponse(row)).thenReturn(RecurringTransactionResponse.builder().id(recurringId).build());
 
