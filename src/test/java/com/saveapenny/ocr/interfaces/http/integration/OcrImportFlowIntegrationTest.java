@@ -1,5 +1,6 @@
 package com.saveapenny.ocr.interfaces.http.integration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -151,6 +152,7 @@ class OcrImportFlowIntegrationTest {
                 .andReturn(), "data", "jobId");
 
         String finalStatus = awaitFinalStatus(token, jobId);
+        assertEquals("COMPLETED", finalStatus);
 
         mockMvc.perform(get("/api/imports/ocr/{jobId}", jobId)
                         .header("Authorization", "Bearer " + token))
@@ -273,7 +275,7 @@ class OcrImportFlowIntegrationTest {
 
     private String awaitFinalStatus(String token, String jobId) throws Exception {
         String finalStatus = "PENDING";
-        for (int i = 0; i < 30 && !("COMPLETED".equals(finalStatus) || "FAILED".equals(finalStatus)); i++) {
+        for (int i = 0; i < 100 && !("COMPLETED".equals(finalStatus) || "FAILED".equals(finalStatus)); i++) {
             Thread.sleep(100);
             MvcResult statusResult = mockMvc.perform(get("/api/imports/ocr/{jobId}", jobId)
                             .header("Authorization", "Bearer " + token))
