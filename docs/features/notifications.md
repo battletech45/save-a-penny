@@ -44,7 +44,7 @@ Returns:
 
 ```json
 {
-  "count": 3
+  "unreadCount": 3
 }
 ```
 
