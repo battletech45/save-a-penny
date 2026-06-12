@@ -1,5 +1,6 @@
 package com.saveapenny.notification.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.saveapenny.notification.entity.NotificationType;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -21,6 +22,7 @@ public class NotificationResponse {
     private NotificationType type;
     private String title;
     private String message;
+    private JsonNode metadata;
     private Boolean read;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

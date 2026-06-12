@@ -1,5 +1,6 @@
 package com.saveapenny.notification.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.saveapenny.notification.entity.NotificationType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,4 +25,6 @@ public class CreateNotificationRequest {
 
     @NotBlank
     private String message;
+
+    private JsonNode metadata;
 }

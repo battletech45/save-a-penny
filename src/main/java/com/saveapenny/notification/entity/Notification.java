@@ -42,6 +42,9 @@ public class Notification {
     @Column(nullable = false, length = 1000)
     private String message;
 
+    @Column(columnDefinition = "TEXT")
+    private String metadata;
+
     @Builder.Default
     @Column(name = "read", nullable = false)
     private Boolean read = false;

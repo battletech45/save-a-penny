@@ -40,6 +40,7 @@ class NotificationRepositoryTest {
                 .type(NotificationType.SYSTEM)
                 .title("Read Alert")
                 .message("This is a read notification.")
+                .metadata("{\"source\":\"system\"}")
                 .read(true)
                 .createdAt(OffsetDateTime.now().minusDays(1))
                 .updatedAt(OffsetDateTime.now())
@@ -66,6 +67,7 @@ class NotificationRepositoryTest {
                 readNotification.getId(), userId);
         assertTrue(found.isPresent());
         assertEquals("Read Alert", found.get().getTitle());
+        assertEquals("{\"source\":\"system\"}", found.get().getMetadata());
     }
 
     @Test

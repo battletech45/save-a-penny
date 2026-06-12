@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.saveapenny.auth.service.JwtService;
 import com.saveapenny.config.security.HeaderUserAuthenticationFilter;
 import com.saveapenny.config.security.RateLimitingFilter;
@@ -78,6 +79,7 @@ class NotificationControllerTest {
                 .type(NotificationType.SYSTEM)
                 .title("System")
                 .message("Hello")
+                .metadata(JsonNodeFactory.instance.objectNode().put("source", "system"))
                 .build();
 
         mockMvc.perform(post("/api/v1/notifications")
@@ -86,7 +88,8 @@ class NotificationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.type").value("SYSTEM"));
+                .andExpect(jsonPath("$.data.type").value("SYSTEM"))
+                .andExpect(jsonPath("$.data.metadata.source").value("system"));
     }
 
     @Test
@@ -195,6 +198,7 @@ class NotificationControllerTest {
                 .type(NotificationType.SYSTEM)
                 .title("System")
                 .message("Hello")
+                .metadata(JsonNodeFactory.instance.objectNode().put("source", "system"))
                 .read(false)
                 .createdAt(OffsetDateTime.now().minusDays(1))
                 .updatedAt(OffsetDateTime.now())
