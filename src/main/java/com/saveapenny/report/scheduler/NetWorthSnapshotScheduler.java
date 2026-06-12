@@ -5,6 +5,7 @@ import com.saveapenny.report.repository.NetWorthSnapshotRepository;
 import com.saveapenny.report.repository.ReportAccountRepository;
 import com.saveapenny.account.entity.AccountType;
 import com.saveapenny.user.repository.UserRepository;
+import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -62,8 +63,8 @@ public class NetWorthSnapshotScheduler {
             return;
         }
 
-        BigDecimal totalAssets = nullSafeAmount(reportAccountRepository.sumAssetsByUserId(userId, AccountType.CREDIT));
-        BigDecimal totalLiabilities = nullSafeAmount(reportAccountRepository.sumLiabilitiesByUserId(userId, AccountType.CREDIT));
+        BigDecimal totalAssets = nullSafeAmount(reportAccountRepository.sumAssetsByUserId(userId, List.of(AccountType.CREDIT)));
+        BigDecimal totalLiabilities = nullSafeAmount(reportAccountRepository.sumLiabilitiesByUserId(userId, List.of(AccountType.CREDIT)));
         BigDecimal netWorth = totalAssets.subtract(totalLiabilities);
 
         NetWorthSnapshot snapshot = NetWorthSnapshot.builder()

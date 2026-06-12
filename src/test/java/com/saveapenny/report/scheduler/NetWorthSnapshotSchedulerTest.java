@@ -66,8 +66,8 @@ class NetWorthSnapshotSchedulerTest {
 
         scheduler.computeDailySnapshots();
 
-        verify(reportAccountRepository).sumAssetsByUserId(user1, AccountType.CREDIT);
-        verify(reportAccountRepository).sumAssetsByUserId(user2, AccountType.CREDIT);
+        verify(reportAccountRepository).sumAssetsByUserId(user1, List.of(AccountType.CREDIT));
+        verify(reportAccountRepository).sumAssetsByUserId(user2, List.of(AccountType.CREDIT));
         verify(netWorthSnapshotRepository, times(2)).save(any());
     }
 

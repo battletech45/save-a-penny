@@ -3,6 +3,7 @@ package com.saveapenny.report.repository;
 import com.saveapenny.account.entity.Account;
 import com.saveapenny.account.entity.AccountType;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,16 +16,16 @@ public interface ReportAccountRepository extends JpaRepository<Account, UUID> {
             from Account a
             where a.userId = :userId
               and a.active = true
-              and a.type <> :liabilityType
+              and a.type not in :liabilityTypes
             """)
-    BigDecimal sumAssetsByUserId(@Param("userId") UUID userId, @Param("liabilityType") AccountType liabilityType);
+    BigDecimal sumAssetsByUserId(@Param("userId") UUID userId, @Param("liabilityTypes") List<AccountType> liabilityTypes);
 
     @Query("""
             select coalesce(sum(a.balance), 0)
             from Account a
             where a.userId = :userId
               and a.active = true
-              and a.type = :liabilityType
+              and a.type in :liabilityTypes
             """)
-    BigDecimal sumLiabilitiesByUserId(@Param("userId") UUID userId, @Param("liabilityType") AccountType liabilityType);
+    BigDecimal sumLiabilitiesByUserId(@Param("userId") UUID userId, @Param("liabilityTypes") List<AccountType> liabilityTypes);
 }
