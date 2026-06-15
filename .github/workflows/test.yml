@@ -80,7 +80,7 @@ jobs:
               echo "Missing OCR report: $report" >&2
               exit 1
             fi
-            if ! rg -q 'skipped="0"' "$report"; then
+            if ! grep -q 'skipped="0"' "$report"; then
               echo "OCR test was skipped: $report" >&2
               exit 1
             fi
