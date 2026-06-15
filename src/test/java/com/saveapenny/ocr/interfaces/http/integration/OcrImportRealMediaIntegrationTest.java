@@ -141,8 +141,10 @@ class OcrImportRealMediaIntegrationTest {
                 .andReturn();
 
         String jobId = extractField(uploadResult, "data", "jobId");
-        long timeoutBudgetMillis = Math.max(15_000L, ocrProperties.jobTimeoutMillis() + 10_000L);
+        int attempts = Math.max(1, ocrProperties.maxRetries() + 1);
+        long timeoutBudgetMillis = Math.max(15_000L, (ocrProperties.jobTimeoutMillis() * attempts) + 10_000L);
         long deadlineMillis = System.currentTimeMillis() + timeoutBudgetMillis;
+        String lastStatus = "PENDING";
 
         while (System.currentTimeMillis() < deadlineMillis) {
             Thread.sleep(200);
@@ -151,16 +153,17 @@ class OcrImportRealMediaIntegrationTest {
                     .andExpect(status().isOk())
                     .andReturn();
 
-            String status = extractField(statusResult, "data", "status");
-            if ("COMPLETED".equals(status)) {
+            lastStatus = extractField(statusResult, "data", "status");
+            if ("COMPLETED".equals(lastStatus)) {
                 return statusResult;
             }
-            if ("FAILED".equals(status)) {
+            if ("FAILED".equals(lastStatus)) {
                 throw new AssertionError("OCR job failed: " + statusResult.getResponse().getContentAsString());
             }
         }
 
-        throw new AssertionError("OCR job did not reach COMPLETED in time within " + timeoutBudgetMillis + " ms");
+        throw new AssertionError("OCR job did not reach COMPLETED in time within "
+                + timeoutBudgetMillis + " ms; last status=" + lastStatus + ", attempts=" + attempts);
     }
 
     private MockMultipartFile createPngReceipt() throws Exception {
