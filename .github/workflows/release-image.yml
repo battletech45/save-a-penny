@@ -1,10 +1,9 @@
 name: Release Image
 
 on:
-  push:
-    branches: [main]
-    tags:
-      - "v*.*.*"
+  workflow_run:
+    workflows: [CI, Validate, Test]
+    types: [completed]
   workflow_dispatch:
     inputs:
       publish_image:
@@ -17,14 +16,99 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: release-image-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  verify-prerequisites:
+    name: Verify Prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check required workflows
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName === 'workflow_dispatch') {
+              core.setOutput('ready', 'true');
+              return;
+            }
+
+            if (context.payload.workflow_run.conclusion !== 'success') {
+              core.setOutput('ready', 'false');
+              core.notice(`Skipping release image because triggering workflow concluded with ${context.payload.workflow_run.conclusion}.`);
+              return;
+            }
+
+            if (context.payload.workflow_run.event !== 'push') {
+              core.setOutput('ready', 'false');
+              core.notice(`Skipping release image for ${context.payload.workflow_run.event} workflow runs.`);
+              return;
+            }
+
+            const required = ['CI', 'Validate', 'Test'];
+            const { owner, repo } = context.repo;
+            const headSha = context.payload.workflow_run.head_sha;
+            const event = context.payload.workflow_run.event;
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              event,
+              head_sha: headSha,
+              per_page: 100,
+            });
+
+            const missing = required.filter((name) => {
+              const run = runs.find((candidate) => candidate.name === name);
+              return !run || run.status !== 'completed' || run.conclusion !== 'success';
+            });
+
+            if (missing.length > 0) {
+              core.notice(`Waiting for successful completion of: ${missing.join(', ')}`);
+              core.setOutput('ready', 'false');
+              return;
+            }
+
+            core.setOutput('ready', 'true');
+
   build-image:
     name: Build Image
+    needs: verify-prerequisites
+    if: needs.verify-prerequisites.outputs.ready == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve release context
+        id: release-context
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_run" ] && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
+            echo "is_main=true" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_EVENT_NAME}" != "workflow_run" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "is_main=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_main=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          version_tag=""
+          for tag in $(git tag --points-at HEAD); do
+            case "$tag" in
+              v*.*.*)
+                version_tag="${tag#v}"
+                break
+                ;;
+            esac
+          done
+          echo "version_tag=$version_tag" >> "$GITHUB_OUTPUT"
 
       - name: Print Docker version
         run: docker version
@@ -45,8 +129,8 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ steps.release-context.outputs.is_main == 'true' }}
+            type=raw,value=${{ steps.release-context.outputs.version_tag }},enable=${{ steps.release-context.outputs.version_tag != '' }}
 
       - name: Build image without push
         uses: docker/build-push-action@v7
@@ -63,13 +147,13 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Release Image Build"
-            echo
-            echo "- Ref: \`${{ github.ref }}\`"
-            echo "- Event: \`${{ github.event_name }}\`"
-            echo "- Publish requested: \`${{ github.event_name == 'workflow_dispatch' && inputs.publish_image || github.event_name != 'workflow_dispatch' }}\`"
-            echo "- Image: \`ghcr.io/${{ github.repository }}\`"
-            echo "- Tags:"
+             echo "## Release Image Build"
+             echo
+             echo "- Ref: \`${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}\`"
+             echo "- Event: \`${{ github.event_name }}\`"
+             echo "- Publish requested: \`${{ github.event_name == 'workflow_dispatch' && inputs.publish_image || github.event_name != 'workflow_dispatch' }}\`"
+             echo "- Image: \`ghcr.io/${{ github.repository }}\`"
+             echo "- Tags:"
             echo '```'
             echo "${{ steps.meta.outputs.tags }}"
             echo '```'
@@ -77,13 +161,38 @@ jobs:
 
   publish-image:
     name: Publish Image
-    needs: build-image
-    if: github.event_name == 'push' || inputs.publish_image == true
+    needs: [verify-prerequisites, build-image]
+    if: github.event_name == 'workflow_run' || inputs.publish_image == true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve release context
+        id: release-context
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_run" ] && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
+            echo "is_main=true" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_EVENT_NAME}" != "workflow_run" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "is_main=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_main=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          version_tag=""
+          for tag in $(git tag --points-at HEAD); do
+            case "$tag" in
+              v*.*.*)
+                version_tag="${tag#v}"
+                break
+                ;;
+            esac
+          done
+          echo "version_tag=$version_tag" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -98,8 +207,8 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ steps.release-context.outputs.is_main == 'true' }}
+            type=raw,value=${{ steps.release-context.outputs.version_tag }},enable=${{ steps.release-context.outputs.version_tag != '' }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -123,11 +232,11 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Release Image Publish"
-            echo
-            echo "- Ref: \`${{ github.ref }}\`"
-            echo "- Image: \`ghcr.io/${{ github.repository }}\`"
-            echo "- Published tags:"
+             echo "## Release Image Publish"
+             echo
+             echo "- Ref: \`${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}\`"
+             echo "- Image: \`ghcr.io/${{ github.repository }}\`"
+             echo "- Published tags:"
             echo '```'
             echo "${{ steps.meta.outputs.tags }}"
             echo '```'
