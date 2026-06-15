@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.saveapenny.config.OcrProperties;
 import com.saveapenny.ocr.support.runtime.OcrRuntimeEnvironment;
 import com.saveapenny.ocr.support.runtime.OcrRuntimeChecker;
 import com.saveapenny.ocr.support.runtime.OcrRuntimeStatus;
@@ -69,6 +70,9 @@ class OcrImportRealMediaIntegrationTest {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private OcrProperties ocrProperties;
 
     @BeforeAll
     static void preloadNativeLibraryPath() {
@@ -137,9 +141,11 @@ class OcrImportRealMediaIntegrationTest {
                 .andReturn();
 
         String jobId = extractField(uploadResult, "data", "jobId");
+        long timeoutBudgetMillis = Math.max(15_000L, ocrProperties.jobTimeoutMillis() + 10_000L);
+        long deadlineMillis = System.currentTimeMillis() + timeoutBudgetMillis;
 
-        for (int i = 0; i < 60; i++) {
-            Thread.sleep(100);
+        while (System.currentTimeMillis() < deadlineMillis) {
+            Thread.sleep(200);
             MvcResult statusResult = mockMvc.perform(get("/api/imports/ocr/{jobId}", jobId)
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
@@ -154,7 +160,7 @@ class OcrImportRealMediaIntegrationTest {
             }
         }
 
-        throw new AssertionError("OCR job did not reach COMPLETED in time");
+        throw new AssertionError("OCR job did not reach COMPLETED in time within " + timeoutBudgetMillis + " ms");
     }
 
     private MockMultipartFile createPngReceipt() throws Exception {

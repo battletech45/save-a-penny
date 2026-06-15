@@ -28,6 +28,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
 
+      - name: Print Tesseract version
+        run: tesseract --version
+
+      - name: Resolve OCR runtime paths
+        run: |
+          for path in /usr/share/tesseract-ocr/5/tessdata /usr/share/tesseract-ocr/4.00/tessdata /usr/share/tessdata /usr/local/share/tessdata; do
+            if [ -d "$path" ]; then
+              echo "OCR_TESSDATA_PATH=$path" >> "$GITHUB_ENV"
+              echo "Resolved OCR_TESSDATA_PATH=$path"
+              exit 0
+            fi
+          done
+          echo "Unable to locate tessdata on runner" >&2
+          exit 1
+
       - name: Build and test
         run: mvn -B clean verify
 
