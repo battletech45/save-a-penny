@@ -11,6 +11,54 @@ cp .env.example .env   # fill in values
 docker compose up --build
 ```
 
+`docker compose` is the recommended way to run the app because it keeps PostgreSQL and application settings together and waits for the database health check before starting the app.
+
+### Docker Run
+
+Use this only if you want to start the database and app containers manually.
+
+Create a shared Docker network first:
+
+```bash
+docker network create saveapenny-net
+```
+
+Start PostgreSQL:
+
+```bash
+docker run -d \
+  --name saveapenny-postgres \
+  --network saveapenny-net \
+  -e POSTGRES_DB="saveapenny" \
+  -e POSTGRES_USER="postgres" \
+  -e POSTGRES_PASSWORD="postgres" \
+  -p 5432:5432 \
+  postgres:16
+```
+
+Wait until PostgreSQL is ready:
+
+```bash
+docker logs saveapenny-postgres
+```
+
+Build and start the app locally:
+
+```bash
+docker build -t save-a-penny .
+docker run -d \
+  --name saveapenny-app \
+  --network saveapenny-net \
+  -p 8080:8080 \
+  -e JWT_SECRET="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+  -e DB_USERNAME="postgres" \
+  -e DB_PASSWORD="postgres" \
+  -e SPRING_DATASOURCE_URL="jdbc:postgresql://saveapenny-postgres:5432/saveapenny" \
+  save-a-penny
+```
+
+The sample `JWT_SECRET` and database credentials are for local development only.
+
 App starts at `http://localhost:8080`:
 
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
@@ -21,17 +69,76 @@ App starts at `http://localhost:8080`:
 
 Requirements: Java 24, Maven 3.9+, PostgreSQL 16+.
 
+Before starting the app locally, make sure PostgreSQL is running and export the required environment variables:
+
+```bash
+export DB_USERNAME=postgres
+export DB_PASSWORD=postgres
+export JWT_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/saveapenny
+```
+
 ```bash
 mvn spring-boot:run
 ```
 
-## Required Configuration
+## Dependency Vulnerability Scan
+
+Run the OWASP Dependency-Check scan with the dedicated Maven profile:
+
+```bash
+mvn verify -Pdependency-check
+```
+
+Notes:
+
+- The `dependency-check` profile binds the OWASP `check` goal to the `verify` phase.
+- The first run can take a while because the plugin downloads the NVD vulnerability database.
+- Reports are generated in `target/` as `dependency-check-report.html` and `dependency-check-report.json`.
+- Normal builds stay unchanged unless you explicitly enable the `dependency-check` profile.
+
+## Configuration
+
+### Required For The Application
 
 | Variable | Description |
 |----------|-------------|
+| `DB_USERNAME` | Application database user |
+| `DB_PASSWORD` | Application database password |
+| `JWT_SECRET` | HS512 key (64+ characters) |
+
+### Required For Docker PostgreSQL
+
+| Variable | Description |
+|----------|-------------|
+| `POSTGRES_DB` | PostgreSQL database name |
+| `POSTGRES_USER` | PostgreSQL admin user |
+| `POSTGRES_PASSWORD` | PostgreSQL admin password |
+
+### Application (all have safe defaults)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_PORT` | `8080` | HTTP listen port |
+| `ASSISTANT_ENABLED` | `false` | Enable AI assistant chat |
+| `ASSISTANT_AI_PROVIDER` | `openrouter` | `openrouter` or `openai` |
+| `OPENROUTER_API_KEY` | — | OpenRouter API key |
+| `OPENAI_API_KEY` | — | OpenAI API key |
+| `INSIGHT_ENABLED` | `false` | Enable financial insight generation |
+| `GOAL_PROGRESS_ENABLED` | `false` | Enable scheduled goal progress checks |
+
+### Database
+
+| Variable | Description |
+|----------|-------------|
+| `SPRING_DATASOURCE_URL` | JDBC URL (default: `jdbc:postgresql://postgres:5432/saveapenny`) |
 | `DB_USERNAME` | PostgreSQL user |
 | `DB_PASSWORD` | PostgreSQL password |
-| `JWT_SECRET` | HS512 key (64+ chars) |
+
+- Flyway applies migrations on startup
+- Hibernate validates schema (`ddl-auto: validate`)
+- Default host when the app runs in Docker Compose: `postgres:5432`
+- Default host when the app runs on your machine: `localhost:5432`
 
 See `.env.example` for all available settings.
 
@@ -59,30 +166,30 @@ See `.env.example` for all available settings.
 | [CSV Import](docs/features/csv-import.md) | Preview-confirm workflow |
 | [Notifications](docs/features/notifications.md) | Read/unread tracking |
 | [Audit Logs](docs/features/audit-logs.md) | Change tracking |
-| [OCR](docs/features/ocr.md) | Receipt processing (disabled) |
-| [Assistant](docs/features/assistant.md) | AI chat (disabled) |
-| [Insights](docs/features/insights.md) | Financial observations (disabled) |
-| [Goals](docs/features/goals.md) | Goal tracking and simulation (disabled) |
+| [OCR](docs/features/ocr.md) | Receipt processing (enabled by default, requires Tesseract) |
+| [Assistant](docs/features/assistant.md) | AI chat (disabled by default) |
+| [Insights](docs/features/insights.md) | Financial observations (disabled by default) |
+| [Goals](docs/features/goals.md) | Goal tracking and simulation (disabled by default) |
 
 ## Features
 
 ### Core (always enabled)
 
-| Feature | Doc |
-|---------|-----|
-| Accounts | [docs/features/accounts.md](docs/features/accounts.md) |
-| Transactions & Transfers | [docs/features/transactions.md](docs/features/transactions.md) |
-| Budgets | [docs/features/budgets.md](docs/features/budgets.md) |
-| Recurring Transactions | [docs/features/recurring-transactions.md](docs/features/recurring-transactions.md) |
-| Reports & Net Worth | [docs/features/reports.md](docs/features/reports.md) |
-| CSV Import | [docs/features/csv-import.md](docs/features/csv-import.md) |
-| Notifications | [docs/features/notifications.md](docs/features/notifications.md) |
+| Feature | Native Dependency | Doc |
+|---------|-------------------|-----|
+| Accounts | — | [docs/features/accounts.md](docs/features/accounts.md) |
+| Transactions & Transfers | — | [docs/features/transactions.md](docs/features/transactions.md) |
+| Budgets | — | [docs/features/budgets.md](docs/features/budgets.md) |
+| Recurring Transactions | — | [docs/features/recurring-transactions.md](docs/features/recurring-transactions.md) |
+| Reports & Net Worth | — | [docs/features/reports.md](docs/features/reports.md) |
+| CSV Import | — | [docs/features/csv-import.md](docs/features/csv-import.md) |
+| Notifications | — | [docs/features/notifications.md](docs/features/notifications.md) |
+| OCR Receipt Processing | Tesseract | [docs/features/ocr.md](docs/features/ocr.md) |
 
 ### Optional (disabled by default)
 
 | Feature | Enable via | Doc |
 |---------|------------|-----|
-| OCR Receipt Processing | `ocr.enabled: true` | [docs/features/ocr.md](docs/features/ocr.md) |
 | AI Assistant Chat | `ASSISTANT_ENABLED=true` | [docs/features/assistant.md](docs/features/assistant.md) |
 | Goal Tracking & Simulation | `goal.progress.enabled: true` | [docs/features/goals.md](docs/features/goals.md) |
 | Financial Insights | `insight.enabled: true` | [docs/features/insights.md](docs/features/insights.md) |
