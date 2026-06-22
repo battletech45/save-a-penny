@@ -41,7 +41,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
@@ -90,6 +90,17 @@ class GoalControllerTest {
                 .targetAmount(new BigDecimal("10000"))
                 .currency("USD")
                 .targetDate(LocalDate.of(2027, 12, 31))
+                .inputs(objectMapper.readTree(
+                        """
+                        {
+                          "version": 1,
+                          "type": "SAVINGS",
+                          "values": {
+                            "currentAmount": 1500,
+                            "monthlyContribution": 300
+                          }
+                        }
+                        """))
                 .build();
 
         mockMvc.perform(post("/api/v1/goals")
