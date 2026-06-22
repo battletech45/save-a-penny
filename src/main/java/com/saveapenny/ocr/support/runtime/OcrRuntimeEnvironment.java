@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import net.sourceforge.tess4j.TessAPI;
+import net.sourceforge.lept4j.Leptonica1;
 
 public final class OcrRuntimeEnvironment {
 
@@ -89,7 +90,10 @@ public final class OcrRuntimeEnvironment {
         try {
             configureNativeLibraryPathIfMissing();
             String version = TessAPI.INSTANCE.TessVersion();
-            return version != null && !version.isBlank();
+            if (version == null || version.isBlank()) {
+                return false;
+            }
+            return Leptonica1.getLeptonicaVersion() != null;
         } catch (Throwable ex) {
             return false;
         }
