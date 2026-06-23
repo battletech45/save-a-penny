@@ -207,6 +207,35 @@ See [Budgets](features/budgets.md) for period types and status calculation.
 
 See [Reports](features/reports.md) for report details and best practices.
 
+## Stocks
+
+All stock endpoints are authenticated and return the standard response envelope.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/stocks/quote?symbol=` | Real-time quote snapshot |
+| GET | `/api/v1/stocks/daily?symbol=&outputSize=` | Daily OHLCV time series |
+| GET | `/api/v1/stocks/news?symbol=` | News and sentiment for a symbol |
+| GET | `/api/v1/stocks/overview?symbol=` | Company overview and valuation fields |
+| GET | `/api/v1/stocks/income-statement?symbol=` | Annual and quarterly income statements |
+| GET | `/api/v1/stocks/balance-sheet?symbol=` | Annual and quarterly balance sheets |
+| GET | `/api/v1/stocks/cash-flow?symbol=` | Annual and quarterly cash flow statements |
+| GET | `/api/v1/stocks/sma?symbol=&timePeriod=&interval=&seriesType=` | Simple Moving Average |
+| GET | `/api/v1/stocks/ema?symbol=&timePeriod=&interval=&seriesType=` | Exponential Moving Average |
+| GET | `/api/v1/stocks/rsi?symbol=&timePeriod=&interval=&seriesType=` | Relative Strength Index |
+
+### Stock Query Parameters
+
+| Parameter | Applies To | Required | Default | Notes |
+|-----------|------------|----------|---------|-------|
+| `symbol` | all stock endpoints | Yes | — | Uppercase stock ticker, max 10 chars |
+| `outputSize` | `/daily` | No | `compact` | `compact` or `full` |
+| `timePeriod` | `/sma`, `/ema`, `/rsi` | Yes | — | Positive integer |
+| `interval` | `/sma`, `/ema`, `/rsi` | No | `daily` | `daily`, `weekly`, or `monthly` |
+| `seriesType` | `/sma`, `/ema`, `/rsi` | No | `close` | `close`, `open`, `high`, or `low` |
+
+See [Stocks](features/stocks.md) for operational details, rate-limit considerations, and error semantics.
+
 ## Recurring Transactions
 
 | Method | Path | Description |

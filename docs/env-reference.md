@@ -82,6 +82,28 @@ Additional OCR properties in `application.yml`:
 
 See [OCR](features/ocr.md) for feature details.
 
+## Stocks
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STOCK_ENABLED` | `true` | Enable stock market endpoints |
+| `ALPHA_VANTAGE_API_KEY` | — | Alpha Vantage API key used for all stock requests |
+
+Additional stock properties in `application.yml`:
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `stock.base-url` | `https://www.alphavantage.co` | Base URL for Alpha Vantage |
+| `stock.rate-limit-per-minute` | `5` | App-side per-minute stock quota |
+| `stock.rate-limit-per-day` | `25` | App-side per-day stock quota |
+
+Notes:
+
+- `stock.enabled=true` alone is not sufficient for live calls; a blank `ALPHA_VANTAGE_API_KEY` causes stock requests to return `STOCK_DISABLED`.
+- Stock endpoints are read-only and authenticated.
+
+See [Stocks](features/stocks.md) for feature details.
+
 ## Insights
 
 | Variable | Default | Description |

@@ -63,6 +63,7 @@ All API errors return an HTTP 4xx or 5xx status code with a consistent JSON enve
 | `INVALID_GOAL_TYPE` | Invalid goal type identifier |
 | `INVALID_GOAL_SIMULATION_REQUEST` | Goal simulation request failed validation |
 | `OCR_PROCESSING_FAILED` | OCR engine encountered an unrecoverable error |
+| `INVALID_STOCK_SYMBOL` | Stock symbol or stock query parameter is invalid |
 
 ### Not Found (404)
 
@@ -84,6 +85,7 @@ All API errors return an HTTP 4xx or 5xx status code with a consistent JSON enve
 | `ASSISTANT_CHAT_SESSION_NOT_FOUND` | Chat session not found or expired |
 | `AUDIT_LOG_NOT_FOUND` | Audit entry not found or not owned by the caller |
 | `LINKED_ACCOUNT_NOT_FOUND` | Linked account not found or not owned by the caller |
+| `STOCK_QUOTE_NOT_AVAILABLE` | Stock provider returned no usable data for the requested symbol or indicator |
 
 ### Conflict (409)
 
@@ -100,6 +102,7 @@ All API errors return an HTTP 4xx or 5xx status code with a consistent JSON enve
 | Code | Meaning |
 |------|---------|
 | `RATE_LIMITED` | Too many requests. Check `Retry-After` header |
+| `STOCK_RATE_LIMIT_EXCEEDED` | App-side stock quota exceeded before calling Alpha Vantage |
 
 ### Feature Disabled (503)
 
@@ -107,6 +110,7 @@ All API errors return an HTTP 4xx or 5xx status code with a consistent JSON enve
 |------|---------|
 | `ASSISTANT_DISABLED` | Assistant feature is not enabled |
 | `OCR_DISABLED` | OCR feature is not enabled |
+| `STOCK_DISABLED` | Stock feature is disabled or Alpha Vantage API key is missing |
 
 ## 5xx Server Errors
 
@@ -115,6 +119,7 @@ All API errors return an HTTP 4xx or 5xx status code with a consistent JSON enve
 | `INTERNAL_SERVER_ERROR` | 500 | Unexpected server error. Check server logs |
 | `ASSISTANT_PROCESSING_FAILED` | 502 | AI provider returned an error or response could not be parsed |
 | `INSIGHT_GENERATION_FAILED` | 500 | Insight generation job failed |
+| `STOCK_PROVIDER_ERROR` | 502 | Alpha Vantage returned an error or note response, or the transport failed |
 
 ## Validation Details Format
 

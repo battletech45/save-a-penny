@@ -109,8 +109,10 @@ mvn spring-boot:run
 | `ASSISTANT_AI_PROVIDER` | `openrouter` | `openrouter` or `openai` |
 | `OPENROUTER_API_KEY` | — | OpenRouter API key |
 | `OPENAI_API_KEY` | — | OpenAI API key |
+| `ALPHA_VANTAGE_API_KEY` | — | Alpha Vantage API key for stock market endpoints |
 | `INSIGHT_ENABLED` | `false` | Enable financial insight generation |
 | `GOAL_PROGRESS_ENABLED` | `false` | Enable scheduled goal progress checks |
+| `STOCK_ENABLED` | `true` | Enable stock market endpoints (API key still required) |
 
 ### Database
 
@@ -155,6 +157,7 @@ See `.env.example` for all available settings.
 | [Assistant](docs/features/assistant.md) | AI chat (disabled by default) |
 | [Insights](docs/features/insights.md) | Financial observations (disabled by default) |
 | [Goals](docs/features/goals.md) | Goal tracking and simulation (disabled by default) |
+| [Stocks](docs/features/stocks.md) | Alpha Vantage powered stock market data |
 
 ## Features
 
@@ -178,6 +181,7 @@ See `.env.example` for all available settings.
 | AI Assistant Chat | `ASSISTANT_ENABLED=true` | [docs/features/assistant.md](docs/features/assistant.md) |
 | Goal Tracking & Simulation | `goal.progress.enabled: true` | [docs/features/goals.md](docs/features/goals.md) |
 | Financial Insights | `insight.enabled: true` | [docs/features/insights.md](docs/features/insights.md) |
+| Stock Market Data | `STOCK_ENABLED=true` and `ALPHA_VANTAGE_API_KEY` set | [docs/features/stocks.md](docs/features/stocks.md) |
 
 ## Project
 
