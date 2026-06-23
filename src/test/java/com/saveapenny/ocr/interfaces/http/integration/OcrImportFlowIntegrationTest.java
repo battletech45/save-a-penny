@@ -18,10 +18,11 @@ import com.saveapenny.ocr.support.runtime.OcrRuntimeChecker;
 import com.saveapenny.ocr.support.runtime.OcrRuntimeStatus;
 import com.saveapenny.user.entity.Role;
 import com.saveapenny.user.repository.RoleRepository;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -80,7 +81,7 @@ class OcrImportFlowIntegrationTest {
     @Test
     void uploadAndStatusFlow_worksEndToEnd() throws Exception {
         String token = registerAndGetToken("ocr.flow@example.com", "OCR Flow");
-        when(ocrService.extractText(any())).thenReturn("2026-05-20 market 15.50");
+        when(ocrService.extractTextAsync(any())).thenReturn(CompletableFuture.completedFuture("2026-05-20 market 15.50"));
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -127,7 +128,7 @@ class OcrImportFlowIntegrationTest {
     @Test
     void uploadAndStatusFlow_parsesStructuredReceiptText() throws Exception {
         String token = registerAndGetToken("ocr.structured@example.com", "OCR Structured");
-        when(ocrService.extractText(any())).thenReturn("""
+        when(ocrService.extractTextAsync(any())).thenReturn(CompletableFuture.completedFuture("""
                 YAPI VE KREDI BANKASI A.S.
                 Ref No 253385491674
 
@@ -137,7 +138,7 @@ class OcrImportFlowIntegrationTest {
 
                 TOPLAM 1.250,00-
                 #TL#
-                """);
+                """));
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -181,7 +182,7 @@ class OcrImportFlowIntegrationTest {
     @Test
     void uploadAndStatusFlow_returnsParseWarningWhenTextExistsWithoutCandidates() throws Exception {
         String token = registerAndGetToken("ocr.warning@example.com", "OCR Warning");
-        when(ocrService.extractText(any())).thenReturn("BANKA DEKONTU\nReferans No 12345\nTesekkurler");
+        when(ocrService.extractTextAsync(any())).thenReturn(CompletableFuture.completedFuture("BANKA DEKONTU\nReferans No 12345\nTesekkurler"));
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",

@@ -9,8 +9,8 @@ import com.saveapenny.config.OcrProperties;
 import com.saveapenny.ocr.support.runtime.OcrRuntimeChecker;
 import com.saveapenny.ocr.support.runtime.OcrRuntimeStatus;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.Status;
 
 class OcrHealthIndicatorTest {
 
