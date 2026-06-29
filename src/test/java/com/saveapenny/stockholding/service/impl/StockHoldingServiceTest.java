@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +14,7 @@ import com.saveapenny.stock.dto.StockQuoteResponse;
 import com.saveapenny.stock.exception.StockClientException;
 import com.saveapenny.stock.exception.StockDisabledException;
 import com.saveapenny.stock.exception.StockQuoteNotAvailableException;
+import com.saveapenny.stock.exception.StockRateLimitExceededException;
 import com.saveapenny.stock.service.StockService;
 import com.saveapenny.stockholding.dto.CreateHoldingRequest;
 import com.saveapenny.stockholding.dto.HoldingResponse;
@@ -38,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class StockHoldingServiceTest {
@@ -151,10 +155,10 @@ class StockHoldingServiceTest {
                 .purchaseDate(LocalDate.of(2025, 4, 25))
                 .build();
 
-        when(stockService.getQuote("IBM")).thenReturn(quote);
         when(repository.existsByUserIdAndSymbolAndPurchaseDate(userId, "IBM", request.getPurchaseDate())).thenReturn(true);
 
         assertThrows(DuplicateHoldingException.class, () -> service.create(userId, request));
+        verify(stockService, never()).getQuote("IBM");
     }
 
     @Test
@@ -223,11 +227,27 @@ class StockHoldingServiceTest {
 
         when(stockService.getQuote("UNKNOWN")).thenThrow(new StockQuoteNotAvailableException("No data"));
 
-        assertThrows(HoldingNotFoundException.class, () -> service.create(userId, request));
+        assertThrows(InvalidHoldingSymbolException.class, () -> service.create(userId, request));
     }
 
     @Test
-    void create_handlesProviderErrorGracefully() {
+    void create_rethrowsProviderError() {
+        CreateHoldingRequest request = CreateHoldingRequest.builder()
+                .symbol("IBM")
+                .quantity(new BigDecimal("10.00000000"))
+                .purchasePrice(new BigDecimal("140.0000"))
+                .currency("USD")
+                .purchaseDate(LocalDate.of(2025, 4, 25))
+                .build();
+
+        when(repository.existsByUserIdAndSymbolAndPurchaseDate(userId, "IBM", request.getPurchaseDate())).thenReturn(false);
+        when(stockService.getQuote("IBM")).thenThrow(new StockClientException("Provider error"));
+
+        assertThrows(StockClientException.class, () -> service.create(userId, request));
+    }
+
+    @Test
+    void create_reusesValidatedQuoteForResponse() {
         CreateHoldingRequest request = CreateHoldingRequest.builder()
                 .symbol("IBM")
                 .quantity(new BigDecimal("10.00000000"))
@@ -256,6 +276,7 @@ class StockHoldingServiceTest {
 
         assertNotNull(result);
         assertEquals(0, new BigDecimal("175.42").compareTo(result.getCurrentPrice()));
+        verify(stockService, times(1)).getQuote("IBM");
     }
 
     @Test
@@ -290,6 +311,15 @@ class StockHoldingServiceTest {
         assertNull(result.getCurrentPrice());
         assertNull(result.getCurrentValue());
         assertNull(result.getProfitLoss());
+    }
+
+    @Test
+    void getById_throws_whenStocksDisabled() {
+        when(repository.findByIdAndUserId(holdingId, userId)).thenReturn(Optional.of(entity));
+        when(mapper.toResponse(entity)).thenReturn(sampleResponse());
+        when(stockService.getQuote("IBM")).thenThrow(new StockDisabledException("Stock market feature is not enabled."));
+
+        assertThrows(StockDisabledException.class, () -> service.getById(userId, holdingId));
     }
 
     @Test
@@ -328,6 +358,34 @@ class StockHoldingServiceTest {
 
         assertEquals(2, result.getTotalElements());
         verify(stockService).getQuote("IBM");
+    }
+
+    @Test
+    void getAll_cachesQuoteFailuresPerSymbol() {
+        StockHolding secondEntity = StockHolding.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .symbol("IBM")
+                .quantity(new BigDecimal("5.00000000"))
+                .purchasePrice(new BigDecimal("150.0000"))
+                .currency("USD")
+                .purchaseDate(LocalDate.of(2025, 5, 10))
+                .build();
+
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(repository.findAllByUserId(userId, pageable)).thenReturn(new PageImpl<>(List.of(entity, secondEntity), pageable, 2));
+        when(mapper.toResponse(entity)).thenReturn(sampleResponse());
+        when(mapper.toResponse(secondEntity)).thenReturn(HoldingResponse.builder()
+                .id(secondEntity.getId())
+                .quantity(secondEntity.getQuantity())
+                .purchasePrice(secondEntity.getPurchasePrice())
+                .build());
+        when(stockService.getQuote("IBM")).thenThrow(new StockClientException("Provider error"));
+
+        Page<HoldingResponse> result = service.getAll(userId, pageable);
+
+        assertEquals(2, result.getTotalElements());
+        verify(stockService, times(1)).getQuote("IBM");
     }
 
     @Test
@@ -391,6 +449,43 @@ class StockHoldingServiceTest {
         assertEquals(1, result.getHoldingCount());
         assertEquals(0, new BigDecimal("1400.00").compareTo(result.getTotalInvested()));
         assertNull(result.getTotalProfitLoss());
+    }
+
+    @Test
+    void getSummary_computesPlFromQuotedSubsetOnly() {
+        StockHolding secondEntity = StockHolding.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .symbol("AAPL")
+                .quantity(new BigDecimal("5.00000000"))
+                .purchasePrice(new BigDecimal("180.0000"))
+                .currency("USD")
+                .purchaseDate(LocalDate.of(2025, 5, 10))
+                .build();
+
+        when(repository.findAllByUserId(userId)).thenReturn(List.of(entity, secondEntity));
+        when(mapper.toResponse(entity)).thenReturn(HoldingResponse.builder()
+                .id(entity.getId())
+                .symbol("IBM")
+                .quantity(entity.getQuantity())
+                .purchasePrice(entity.getPurchasePrice())
+                .build());
+        when(mapper.toResponse(secondEntity)).thenReturn(HoldingResponse.builder()
+                .id(secondEntity.getId())
+                .symbol("AAPL")
+                .quantity(secondEntity.getQuantity())
+                .purchasePrice(secondEntity.getPurchasePrice())
+                .build());
+        when(stockService.getQuote("IBM")).thenReturn(quote);
+        when(stockService.getQuote("AAPL")).thenThrow(new StockClientException("Provider error"));
+
+        HoldingSummaryResponse result = service.getSummary(userId);
+
+        assertEquals(2, result.getHoldingCount());
+        assertEquals(0, new BigDecimal("2300.00").compareTo(result.getTotalInvested()));
+        assertEquals(0, new BigDecimal("1754.20").compareTo(result.getTotalCurrentValue()));
+        assertEquals(0, new BigDecimal("354.20").compareTo(result.getTotalProfitLoss()));
+        assertEquals(0, new BigDecimal("25.30").compareTo(result.getTotalProfitLossPercent()));
     }
 
     @Test
@@ -460,6 +555,42 @@ class StockHoldingServiceTest {
         HoldingResponse result = service.update(userId, holdingId, request);
 
         assertNotNull(result);
+    }
+
+    @Test
+    void create_translatesUniqueConstraintViolation() {
+        CreateHoldingRequest request = CreateHoldingRequest.builder()
+                .symbol("IBM")
+                .quantity(new BigDecimal("10.00000000"))
+                .purchasePrice(new BigDecimal("140.0000"))
+                .currency("USD")
+                .purchaseDate(LocalDate.of(2025, 4, 25))
+                .build();
+
+        when(repository.existsByUserIdAndSymbolAndPurchaseDate(userId, "IBM", request.getPurchaseDate())).thenReturn(false);
+        when(stockService.getQuote("IBM")).thenReturn(quote);
+        when(mapper.toEntity(request)).thenReturn(StockHolding.builder().build());
+        when(repository.save(any())).thenThrow(new DataIntegrityViolationException(
+                "duplicate",
+                new RuntimeException("constraint [uq_stock_holdings_user_symbol_date]")));
+
+        assertThrows(DuplicateHoldingException.class, () -> service.create(userId, request));
+    }
+
+    @Test
+    void create_rethrowsStockRateLimitExceeded() {
+        CreateHoldingRequest request = CreateHoldingRequest.builder()
+                .symbol("IBM")
+                .quantity(new BigDecimal("10.00000000"))
+                .purchasePrice(new BigDecimal("140.0000"))
+                .currency("USD")
+                .purchaseDate(LocalDate.of(2025, 4, 25))
+                .build();
+
+        when(repository.existsByUserIdAndSymbolAndPurchaseDate(userId, "IBM", request.getPurchaseDate())).thenReturn(false);
+        when(stockService.getQuote("IBM")).thenThrow(new StockRateLimitExceededException("Rate limit"));
+
+        assertThrows(StockRateLimitExceededException.class, () -> service.create(userId, request));
     }
 
     @Test

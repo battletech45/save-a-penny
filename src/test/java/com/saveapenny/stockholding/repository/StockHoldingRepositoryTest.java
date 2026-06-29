@@ -3,6 +3,7 @@ package com.saveapenny.stockholding.repository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.saveapenny.stockholding.entity.StockHolding;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.TestPropertySource;
 
 @DataJpaTest
@@ -171,5 +173,20 @@ class StockHoldingRepositoryTest {
         assertEquals("Late entry", saved.getNotes());
         assertNotNull(saved.getCreatedAt());
         assertNotNull(saved.getUpdatedAt());
+    }
+
+    @Test
+    void save_rejectsDuplicateUserSymbolAndPurchaseDate() {
+        StockHolding duplicate = StockHolding.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .symbol("IBM")
+                .quantity(new BigDecimal("1.00000000"))
+                .purchasePrice(new BigDecimal("150.0000"))
+                .currency("USD")
+                .purchaseDate(LocalDate.of(2025, 4, 25))
+                .build();
+
+        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(duplicate));
     }
 }

@@ -3,9 +3,11 @@ package com.saveapenny.stockholding.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,7 +25,17 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "stock_holdings")
+@Table(
+        name = "stock_holdings",
+        indexes = {
+            @Index(name = "idx_stock_holdings_user_id", columnList = "user_id"),
+            @Index(name = "idx_stock_holdings_user_symbol", columnList = "user_id, symbol")
+        },
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uq_stock_holdings_user_symbol_date",
+                    columnNames = {"user_id", "symbol", "purchase_date"})
+        })
 public class StockHolding {
 
     @Id
